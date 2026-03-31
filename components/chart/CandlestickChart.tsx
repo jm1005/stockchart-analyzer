@@ -1,11 +1,16 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import { View, Text, StyleSheet, Dimensions, PanResponder, GestureResponderEvent } from "react-native";
 import Svg, { Rect, Line, G, Path, Text as SvgText } from "react-native-svg";
 import { useColors } from "@/hooks/use-colors";
-import { useChartZoom } from "@/hooks/useChartZoom";
 import type { Candle, SupportResistanceLevel, PatternResult, TechnicalIndicators } from "@/shared/stockTypes";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+interface ZoomState {
+  scale: number;
+  offsetX: number;
+  maxOffsetX: number;
+}
 
 interface CandlestickChartProps {
   candles: Candle[];
@@ -21,6 +26,10 @@ interface CandlestickChartProps {
   width?: number;
   height?: number;
   currency?: string;
+  zoom?: ZoomState;
+  onPan?: (deltaX: number) => void;
+  onZoomChange?: (scale: number) => void;
+  maxCandlesVisible?: number;
 }
 
 export function CandlestickChart({
@@ -32,26 +41,29 @@ export function CandlestickChart({
   width = SCREEN_WIDTH - 16,
   height = 300,
   currency = "KRW",
+  zoom,
+  onPan,
+  onZoomChange,
+  maxCandlesVisible: propMaxCandlesVisible,
 }: CandlestickChartProps) {
   const colors = useColors();
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [panDelta, setPanDelta] = useState(0);
   const lastPanXRef = useRef(0);
 
   const PADDING = { top: 16, right: 60, bottom: 8, left: 8 };
   const chartWidth = width - PADDING.left - PADDING.right;
   const chartHeight = height - PADDING.top - PADDING.bottom;
 
-  // 줌 훅 사용
-  const { zoom, handleZoomChange, handlePan, handleDoubleTap, handleTouchEvent, maxCandlesVisible } =
-    useChartZoom(candles.length, chartWidth);
+  // 기본값 설정 (props가 없을 경우)
+  const currentZoom = zoom || { scale: 1, offsetX: 0, maxOffsetX: 0 };
+  const maxCandlesVisible = propMaxCandlesVisible || 60;
 
   // 표시할 캔들 계산 (줌 + 오프셋 고려)
   const visibleCandles = useMemo(() => {
-    const startIdx = Math.floor(zoom.offsetX);
+    const startIdx = Math.floor(currentZoom.offsetX);
     const endIdx = Math.min(startIdx + maxCandlesVisible, candles.length);
     return candles.slice(startIdx, endIdx);
-  }, [candles, zoom.offsetX, maxCandlesVisible]);
+  }, [candles, currentZoom.offsetX, maxCandlesVisible]);
 
   const { minPrice, maxPrice, priceRange } = useMemo(() => {
     if (visibleCandles.length === 0) return { minPrice: 0, maxPrice: 100, priceRange: 100 };
@@ -76,7 +88,7 @@ export function CandlestickChart({
   );
 
   const candleWidth = Math.max(2, chartWidth / visibleCandles.length - 1);
-  const offset = Math.floor(zoom.offsetX);
+  const offset = Math.floor(currentZoom.offsetX);
 
   const toX = useCallback(
     (index: number) => {
@@ -84,29 +96,6 @@ export function CandlestickChart({
       return PADDING.left + (relativeIdx / maxCandlesVisible) * chartWidth + candleWidth / 2;
     },
     [offset, chartWidth, maxCandlesVisible, candleWidth, PADDING.left]
-  );
-
-  // 핀치 줌 감지 (두 손가락 거리 변화)
-  const lastDistanceRef = useRef<number | null>(null);
-  const handlePinch = useCallback(
-    (touches: React.Touch[]) => {
-      if (touches.length !== 2) {
-        lastDistanceRef.current = null;
-        return;
-      }
-
-      const dx = touches[0].clientX - touches[1].clientX;
-      const dy = touches[0].clientY - touches[1].clientY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (lastDistanceRef.current !== null) {
-        const delta = distance - lastDistanceRef.current;
-        const scaleChange = 1 + delta * 0.01;
-        handleZoomChange(zoom.scale * scaleChange);
-      }
-      lastDistanceRef.current = distance;
-    },
-    [zoom.scale, handleZoomChange]
   );
 
   const panResponder = useMemo(
@@ -120,15 +109,13 @@ export function CandlestickChart({
           const idx = Math.round((x / chartWidth) * (visibleCandles.length - 1));
           const clampedIdx = Math.max(0, Math.min(visibleCandles.length - 1, idx));
           setSelectedIndex(offset + clampedIdx);
-          handleTouchEvent(e.nativeEvent.locationX, e.nativeEvent.locationY);
         },
         onPanResponderMove: (e: GestureResponderEvent) => {
           const deltaX = e.nativeEvent.pageX - lastPanXRef.current;
-          setPanDelta(deltaX);
 
           // 줌이 1x 이상이면 패닝 허용
-          if (zoom.scale > 1.05) {
-            handlePan(deltaX);
+          if (currentZoom.scale > 1.05 && onPan) {
+            onPan(deltaX);
             lastPanXRef.current = e.nativeEvent.pageX;
           } else {
             // 줌이 1x이면 크로스헤어 업데이트
@@ -140,11 +127,10 @@ export function CandlestickChart({
         },
         onPanResponderRelease: () => {
           lastPanXRef.current = 0;
-          setPanDelta(0);
           setTimeout(() => setSelectedIndex(null), 2000);
         },
       }),
-    [chartWidth, visibleCandles.length, offset, PADDING.left, zoom.scale, handlePan, handleTouchEvent]
+    [chartWidth, visibleCandles.length, offset, PADDING.left, currentZoom.scale, onPan]
   );
 
   const selectedCandle = selectedIndex != null ? candles[selectedIndex] : null;
@@ -196,12 +182,11 @@ export function CandlestickChart({
       ) : null}
 
       {/* Zoom Level Indicator */}
-      {zoom.scale > 1.05 && (
+      {currentZoom.scale > 1.05 && (
         <View style={[styles.zoomIndicator, { backgroundColor: colors.surface }]}>
           <Text style={[styles.zoomText, { color: colors.muted }]}>
-            🔍 {zoom.scale.toFixed(1)}x
+            🔍 {currentZoom.scale.toFixed(1)}x
           </Text>
-          <Text style={[styles.resetHint, { color: colors.muted }]}>더블탭으로 리셋</Text>
         </View>
       )}
 
@@ -455,9 +440,5 @@ const styles = StyleSheet.create({
   zoomText: {
     fontSize: 12,
     fontWeight: "700",
-  },
-  resetHint: {
-    fontSize: 9,
-    marginTop: 2,
   },
 });

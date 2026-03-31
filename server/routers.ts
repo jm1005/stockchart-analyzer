@@ -173,6 +173,44 @@ export const appRouter = router({
           .map((r) => (r as PromiseFulfilledResult<any>).value);
       }),
 
+    // Get financial data (PE, PB, dividend yield, etc.)
+    financials: publicProcedure
+      .input(z.object({ symbol: z.string() }))
+      .query(async ({ input }) => {
+        try {
+          const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(input.symbol)}?modules=summaryDetail,financialData,defaultKeyStatistics`;
+          const data = await fetchYahooFinance(url);
+          const result = data?.quoteSummary?.result?.[0];
+          if (!result) return {};
+
+          const summary = result.summaryDetail || {};
+          const financial = result.financialData || {};
+          const keyStats = result.defaultKeyStatistics || {};
+
+          return {
+            pe: summary.trailingPE?.raw ?? financial.trailingPE?.raw,
+            pb: keyStats.priceToBook?.raw,
+            dividendYield: summary.dividendYield?.raw,
+            revenue: financial.totalRevenue?.raw,
+            operatingIncome: financial.operatingCashflow?.raw,
+            netIncome: financial.netIncome?.raw,
+            eps: keyStats.trailingEps?.raw,
+            roe: financial.returnOnEquity?.raw,
+            roa: financial.returnOnAssets?.raw,
+            debtToEquity: keyStats.debtToEquity?.raw,
+            currentRatio: financial.currentRatio?.raw,
+            profitMargin: financial.profitMargins?.raw,
+            operatingMargin: financial.operatingMargins?.raw,
+            marketCap: keyStats.marketCap?.raw,
+            fiftyTwoWeekHigh: summary.fiftyTwoWeekHigh?.raw,
+            fiftyTwoWeekLow: summary.fiftyTwoWeekLow?.raw,
+          };
+        } catch (error) {
+          console.error("Failed to fetch financials:", error);
+          return {};
+        }
+      }),
+
     // Get market indices
     indices: publicProcedure.query(async () => {
       const symbols = ["^KS11", "^KQ11", "^IXIC", "^GSPC", "^DJI"];
