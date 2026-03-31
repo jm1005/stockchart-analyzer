@@ -8,6 +8,11 @@ export const themeColors: {
   success: { light: string; dark: string };
   warning: { light: string; dark: string };
   error: { light: string; dark: string };
+  bullish: { light: string; dark: string };
+  bearish: { light: string; dark: string };
+  support: { light: string; dark: string };
+  resistance: { light: string; dark: string };
+  tint: { light: string; dark: string };
 };
 
 declare const themeConfig: {
