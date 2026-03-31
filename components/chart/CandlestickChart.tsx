@@ -1,7 +1,8 @@
-import React, { useMemo, useCallback, useState } from "react";
-import { View, Text, StyleSheet, Dimensions, PanResponder } from "react-native";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { View, Text, StyleSheet, Dimensions, PanResponder, GestureResponderEvent } from "react-native";
 import Svg, { Rect, Line, G, Path, Text as SvgText } from "react-native-svg";
 import { useColors } from "@/hooks/use-colors";
+import { useChartZoom } from "@/hooks/useChartZoom";
 import type { Candle, SupportResistanceLevel, PatternResult, TechnicalIndicators } from "@/shared/stockTypes";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -34,15 +35,23 @@ export function CandlestickChart({
 }: CandlestickChartProps) {
   const colors = useColors();
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [panDelta, setPanDelta] = useState(0);
+  const lastPanXRef = useRef(0);
 
   const PADDING = { top: 16, right: 60, bottom: 8, left: 8 };
   const chartWidth = width - PADDING.left - PADDING.right;
   const chartHeight = height - PADDING.top - PADDING.bottom;
 
+  // 줌 훅 사용
+  const { zoom, handleZoomChange, handlePan, handleDoubleTap, handleTouchEvent, maxCandlesVisible } =
+    useChartZoom(candles.length, chartWidth);
+
+  // 표시할 캔들 계산 (줌 + 오프셋 고려)
   const visibleCandles = useMemo(() => {
-    if (candles.length <= 60) return candles;
-    return candles.slice(candles.length - 60);
-  }, [candles]);
+    const startIdx = Math.floor(zoom.offsetX);
+    const endIdx = Math.min(startIdx + maxCandlesVisible, candles.length);
+    return candles.slice(startIdx, endIdx);
+  }, [candles, zoom.offsetX, maxCandlesVisible]);
 
   const { minPrice, maxPrice, priceRange } = useMemo(() => {
     if (visibleCandles.length === 0) return { minPrice: 0, maxPrice: 100, priceRange: 100 };
@@ -52,7 +61,6 @@ export function CandlestickChart({
       if (c.low < min) min = c.low;
       if (c.high > max) max = c.high;
     }
-    // Add SR levels to range
     for (const sr of supportResistance) {
       if (sr.price < min) min = sr.price;
       if (sr.price > max) max = sr.price;
@@ -68,12 +76,37 @@ export function CandlestickChart({
   );
 
   const candleWidth = Math.max(2, chartWidth / visibleCandles.length - 1);
-  const offset = candles.length > 60 ? candles.length - 60 : 0;
+  const offset = Math.floor(zoom.offsetX);
 
   const toX = useCallback(
-    (index: number) =>
-      PADDING.left + (index - offset) * (chartWidth / visibleCandles.length) + candleWidth / 2,
-    [offset, chartWidth, visibleCandles.length, candleWidth, PADDING.left]
+    (index: number) => {
+      const relativeIdx = index - offset;
+      return PADDING.left + (relativeIdx / maxCandlesVisible) * chartWidth + candleWidth / 2;
+    },
+    [offset, chartWidth, maxCandlesVisible, candleWidth, PADDING.left]
+  );
+
+  // 핀치 줌 감지 (두 손가락 거리 변화)
+  const lastDistanceRef = useRef<number | null>(null);
+  const handlePinch = useCallback(
+    (touches: React.Touch[]) => {
+      if (touches.length !== 2) {
+        lastDistanceRef.current = null;
+        return;
+      }
+
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (lastDistanceRef.current !== null) {
+        const delta = distance - lastDistanceRef.current;
+        const scaleChange = 1 + delta * 0.01;
+        handleZoomChange(zoom.scale * scaleChange);
+      }
+      lastDistanceRef.current = distance;
+    },
+    [zoom.scale, handleZoomChange]
   );
 
   const panResponder = useMemo(
@@ -81,23 +114,37 @@ export function CandlestickChart({
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: (e) => {
+        onPanResponderGrant: (e: GestureResponderEvent) => {
+          lastPanXRef.current = e.nativeEvent.pageX;
           const x = e.nativeEvent.locationX - PADDING.left;
           const idx = Math.round((x / chartWidth) * (visibleCandles.length - 1));
           const clampedIdx = Math.max(0, Math.min(visibleCandles.length - 1, idx));
           setSelectedIndex(offset + clampedIdx);
+          handleTouchEvent(e.nativeEvent.locationX, e.nativeEvent.locationY);
         },
-        onPanResponderMove: (e) => {
-          const x = e.nativeEvent.locationX - PADDING.left;
-          const idx = Math.round((x / chartWidth) * (visibleCandles.length - 1));
-          const clampedIdx = Math.max(0, Math.min(visibleCandles.length - 1, idx));
-          setSelectedIndex(offset + clampedIdx);
+        onPanResponderMove: (e: GestureResponderEvent) => {
+          const deltaX = e.nativeEvent.pageX - lastPanXRef.current;
+          setPanDelta(deltaX);
+
+          // 줌이 1x 이상이면 패닝 허용
+          if (zoom.scale > 1.05) {
+            handlePan(deltaX);
+            lastPanXRef.current = e.nativeEvent.pageX;
+          } else {
+            // 줌이 1x이면 크로스헤어 업데이트
+            const x = e.nativeEvent.locationX - PADDING.left;
+            const idx = Math.round((x / chartWidth) * (visibleCandles.length - 1));
+            const clampedIdx = Math.max(0, Math.min(visibleCandles.length - 1, idx));
+            setSelectedIndex(offset + clampedIdx);
+          }
         },
         onPanResponderRelease: () => {
+          lastPanXRef.current = 0;
+          setPanDelta(0);
           setTimeout(() => setSelectedIndex(null), 2000);
         },
       }),
-    [chartWidth, visibleCandles.length, offset, PADDING.left]
+    [chartWidth, visibleCandles.length, offset, PADDING.left, zoom.scale, handlePan, handleTouchEvent]
   );
 
   const selectedCandle = selectedIndex != null ? candles[selectedIndex] : null;
@@ -147,6 +194,16 @@ export function CandlestickChart({
           </Text>
         </View>
       ) : null}
+
+      {/* Zoom Level Indicator */}
+      {zoom.scale > 1.05 && (
+        <View style={[styles.zoomIndicator, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.zoomText, { color: colors.muted }]}>
+            🔍 {zoom.scale.toFixed(1)}x
+          </Text>
+          <Text style={[styles.resetHint, { color: colors.muted }]}>더블탭으로 리셋</Text>
+        </View>
+      )}
 
       <View {...panResponder.panHandlers}>
         <Svg width={width} height={height}>
@@ -211,19 +268,23 @@ export function CandlestickChart({
             let upperStarted = false;
             let lowerStarted = false;
 
-            for (let i = offset; i < candles.length; i++) {
+            for (let i = offset; i < offset + maxCandlesVisible && i < candles.length; i++) {
               const upper = bb.upper[i];
               const lower = bb.lower[i];
               const x = toX(i);
               if (upper != null) {
                 const y = toY(upper);
-                if (!upperStarted) { upperPath.push(`M ${x} ${y}`); upperStarted = true; }
-                else upperPath.push(`L ${x} ${y}`);
+                if (!upperStarted) {
+                  upperPath.push(`M ${x} ${y}`);
+                  upperStarted = true;
+                } else upperPath.push(`L ${x} ${y}`);
               }
               if (lower != null) {
                 const y = toY(lower);
-                if (!lowerStarted) { lowerPath.push(`M ${x} ${y}`); lowerStarted = true; }
-                else lowerPath.push(`L ${x} ${y}`);
+                if (!lowerStarted) {
+                  lowerPath.push(`M ${x} ${y}`);
+                  lowerStarted = true;
+                } else lowerPath.push(`L ${x} ${y}`);
               }
             }
             return (
@@ -237,9 +298,9 @@ export function CandlestickChart({
           {/* MA Lines */}
           {indicators && (
             <>
-              {activeIndicators.ma5 && renderMALine(indicators.ma5, offset, candles.length, toX, toY, "#F59E0B")}
-              {activeIndicators.ma20 && renderMALine(indicators.ma20, offset, candles.length, toX, toY, "#3B82F6")}
-              {activeIndicators.ma60 && renderMALine(indicators.ma60, offset, candles.length, toX, toY, "#EC4899")}
+              {activeIndicators.ma5 && renderMALine(indicators.ma5, offset, offset + maxCandlesVisible, toX, toY, "#F59E0B")}
+              {activeIndicators.ma20 && renderMALine(indicators.ma20, offset, offset + maxCandlesVisible, toX, toY, "#3B82F6")}
+              {activeIndicators.ma60 && renderMALine(indicators.ma60, offset, offset + maxCandlesVisible, toX, toY, "#EC4899")}
             </>
           )}
 
@@ -299,9 +360,15 @@ export function CandlestickChart({
           {/* Pattern markers */}
           {patterns.map((pattern, i) => {
             const endIdx = Math.min(pattern.endIndex, candles.length - 1);
+            if (endIdx < offset || endIdx >= offset + maxCandlesVisible) return null;
             const x = toX(endIdx);
             const y = PADDING.top + 8;
-            const patternColor = pattern.signal === "bullish" ? colors.bullish : pattern.signal === "bearish" ? colors.bearish : colors.muted;
+            const patternColor =
+              pattern.signal === "bullish"
+                ? colors.bullish
+                : pattern.signal === "bearish"
+                  ? colors.bearish
+                  : colors.muted;
             return (
               <G key={`pattern-${i}`}>
                 <Rect
@@ -334,24 +401,31 @@ export function CandlestickChart({
 
 function renderMALine(
   maData: (number | null)[],
-  offset: number,
-  total: number,
+  startIdx: number,
+  endIdx: number,
   toX: (i: number) => number,
   toY: (price: number) => number,
   color: string
 ) {
   const pathParts: string[] = [];
   let started = false;
-  for (let i = offset; i < total; i++) {
+  for (let i = startIdx; i < endIdx; i++) {
     const val = maData[i];
-    if (val == null) { started = false; continue; }
+    if (val == null) {
+      started = false;
+      continue;
+    }
     const x = toX(i);
     const y = toY(val);
-    if (!started) { pathParts.push(`M ${x} ${y}`); started = true; }
-    else pathParts.push(`L ${x} ${y}`);
+    if (!started) {
+      pathParts.push(`M ${x} ${y}`);
+      started = true;
+    } else pathParts.push(`L ${x} ${y}`);
   }
   if (pathParts.length === 0) return null;
-  return <Path key={color} d={pathParts.join(" ")} stroke={color} strokeWidth={1.5} fill="none" opacity={0.8} />;
+  return (
+    <Path key={color} d={pathParts.join(" ")} stroke={color} strokeWidth={1.5} fill="none" opacity={0.8} />
+  );
 }
 
 const styles = StyleSheet.create({
@@ -368,5 +442,22 @@ const styles = StyleSheet.create({
   infoText: {
     fontSize: 10,
     fontWeight: "500",
+  },
+  zoomIndicator: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    zIndex: 10,
+  },
+  zoomText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  resetHint: {
+    fontSize: 9,
+    marginTop: 2,
   },
 });

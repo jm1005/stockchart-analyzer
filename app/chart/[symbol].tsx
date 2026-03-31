@@ -27,6 +27,7 @@ import {
 } from "@/lib/technicalAnalysis";
 import type { Period } from "@/shared/stockTypes";
 import * as Haptics from "expo-haptics";
+import { useChartZoom } from "@/hooks/useChartZoom";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CHART_WIDTH = SCREEN_WIDTH - 16;
@@ -58,6 +59,12 @@ export default function ChartScreen() {
   const { data: quote } = trpc.stock.quote.useQuery(
     { symbol: symbol ?? "" },
     { enabled: !!symbol, staleTime: 30_000 }
+  );
+
+  // 줌 상태 관리
+  const { zoom, handleZoomChange, handlePan, handleDoubleTap, maxCandlesVisible } = useChartZoom(
+    chartData?.candles?.length ?? 0,
+    CHART_WIDTH
   );
 
   const indicators = useMemo(() => {
@@ -307,16 +314,20 @@ export default function ChartScreen() {
               <RSIChart
                 rsiData={indicators.rsi}
                 width={CHART_WIDTH}
-                height={90}
+                height={80}
                 totalCandles={chartData.candles.length}
+                zoomOffset={zoom.offsetX}
+                maxCandlesVisible={maxCandlesVisible}
               />
             )}
             {subChart === "macd" && (
               <MACDChart
                 macdData={indicators.macd}
                 width={CHART_WIDTH}
-                height={90}
+                height={80}
                 totalCandles={chartData.candles.length}
+                zoomOffset={zoom.offsetX}
+                maxCandlesVisible={maxCandlesVisible}
               />
             )}
           </View>
