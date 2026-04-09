@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useColors } from "@/hooks/use-colors";
 import { StarRating } from "@/components/ui/StarRating";
 import { PatternIcon } from "@/components/ui/PatternIcons";
+import { PatternTooltip } from "@/components/ui/PatternTooltip";
 import { getPatternColor } from "@/lib/patternColorScheme";
 import type { PatternResult } from "@/shared/stockTypes";
 
@@ -54,9 +55,10 @@ const PATTERN_DESCRIPTIONS: Record<string, string> = {
 interface PatternCardProps {
   pattern: PatternResult;
   currency?: string;
+  onShowOverlay?: (pattern: PatternResult) => void;
 }
 
-export function PatternCard({ pattern, currency = "KRW" }: PatternCardProps) {
+export function PatternCard({ pattern, currency = "KRW", onShowOverlay }: PatternCardProps) {
   const colors = useColors();
   const [expanded, setExpanded] = useState(false);
 
@@ -94,6 +96,7 @@ export function PatternCard({ pattern, currency = "KRW" }: PatternCardProps) {
             <Text style={[styles.patternName, { color: colors.foreground }]}>
               {PATTERN_LABELS[pattern.type] ?? pattern.type}
             </Text>
+            <PatternTooltip patternType={pattern.type} showIcon={true} />
           </View>
           <View style={styles.confidenceRow}>
             <StarRating rating={pattern.confidence} size={14} showPercentage={true} />
@@ -103,6 +106,14 @@ export function PatternCard({ pattern, currency = "KRW" }: PatternCardProps) {
           <View style={[styles.signalBadge, { backgroundColor: signalColor + "22" }]}>
             <Text style={[styles.signalText, { color: signalColor }]}>{signalLabel}</Text>
           </View>
+          {onShowOverlay && (
+            <TouchableOpacity
+              onPress={() => onShowOverlay(pattern)}
+              style={[styles.overlayButton, { borderColor: signalColor }]}
+            >
+              <Text style={[styles.overlayButtonText, { color: signalColor }]}>📊</Text>
+            </TouchableOpacity>
+          )}
           <Text style={[styles.expandIcon, { color: colors.muted }]}>
             {expanded ? "▲" : "▼"}
           </Text>
@@ -142,10 +153,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   cardLeft: { flex: 1, gap: 6 },
-  cardRight: { alignItems: "flex-end", gap: 4, marginTop: 2 },
-  iconRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
-  patternName: { fontSize: 14, fontWeight: "700", flex: 1 },
-  confidenceRow: { flexDirection: "row", alignItems: "center", gap: 6, marginLeft: 28, marginTop: 2 },
+  cardRight: { alignItems: "flex-end", gap: 3, marginTop: 2 },
+  iconRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  patternName: { fontSize: 13, fontWeight: "700", flex: 1 },
+  confidenceRow: { flexDirection: "row", alignItems: "center", gap: 6, marginLeft: 26, marginTop: 2 },
   confidenceBar: {
     width: 80,
     height: 4,
@@ -160,6 +171,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   signalText: { fontSize: 10, fontWeight: "600" },
+  overlayButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  overlayButtonText: { fontSize: 14 },
   expandIcon: { fontSize: 10 },
   expandedContent: { marginTop: 10, gap: 8 },
   description: { fontSize: 13, lineHeight: 20 },
