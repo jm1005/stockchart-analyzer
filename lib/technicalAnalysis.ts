@@ -1,4 +1,5 @@
 import type { Candle, PatternResult, SupportResistanceLevel, TechnicalIndicators } from "@/shared/stockTypes";
+import { detectFlagPennant, detectRSIDivergence, detectMACDDivergence, adjustConfidenceByVolume, filterFakeoutPatterns } from "./advancedPatterns";
 
 // ─────────────────────────────────────────────
 // Moving Average
@@ -484,9 +485,20 @@ export function detectPatterns(candles: Candle[]): PatternResult[] {
     return p;
   });
 
+  // Flag & Pennant 패턴 추가
+  const flagPatterns = detectFlagPennant(candles);
+  patterns.push(...flagPatterns);
+
+  // 거래량 기반 신뢰도 보정
+  const volumeAdjustedPatterns = validatedPatterns.map((p) => adjustConfidenceByVolume(p, candles));
+  patterns.push(...volumeAdjustedPatterns);
+
+  // 가짜 신호 필터링
+  const filteredPatterns = filterFakeoutPatterns(patterns);
+
   // Remove duplicates (keep highest confidence)
   const seen = new Set<string>();
-  return (validatedPatterns as PatternResult[])
+  return (filteredPatterns as PatternResult[])
     .sort((a, b) => b.confidence - a.confidence)
     .filter((p) => {
       if (seen.has(p.type)) return false;
@@ -536,4 +548,46 @@ export function getOverallSignal(
     score,
     reasons,
   };
+}
+
+
+// ─────────────────────────────────────────────
+// Divergence Detection
+// ─────────────────────────────────────────────
+export function detectDivergences(
+  candles: Candle[],
+  indicators: TechnicalIndicators
+): PatternResult[] {
+  if (candles.length < 30) return [];
+
+  const closes = candles.map((c) => c.close);
+  const patterns: PatternResult[] = [];
+
+  // RSI Divergence
+  const rsiDivergences = detectRSIDivergence(candles, indicators.rsi);
+  rsiDivergences.forEach((div) => {
+    patterns.push({
+      type: "rsi_divergence",
+      confidence: div.confidence,
+      startIndex: Math.max(0, candles.length - 20),
+      endIndex: candles.length - 1,
+      description: div.description,
+      signal: div.signal,
+    });
+  });
+
+  // MACD Divergence
+  const macdDivergences = detectMACDDivergence(candles, indicators.macd.macd, closes);
+  macdDivergences.forEach((div) => {
+    patterns.push({
+      type: "macd_divergence",
+      confidence: div.confidence,
+      startIndex: Math.max(0, candles.length - 20),
+      endIndex: candles.length - 1,
+      description: div.description,
+      signal: div.signal,
+    });
+  });
+
+  return patterns;
 }

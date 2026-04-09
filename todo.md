@@ -106,3 +106,23 @@
 - [x] 패턴 신호와 목표가 방향 일치 검증 로직 추가
 - [x] 현재가 대비 목표가 방향 자동 교정
 - [x] Dead Cat Bounce 목표가 추가
+
+
+## Phase 15: Flag & Pennant 및 Divergence 패턴 추가
+- [x] Flag & Pennant 패턴 감지 알고리즘 구현
+- [x] RSI Divergence 감지 (가격 vs RSI)
+- [x] MACD Divergence 감지 (가격 vs MACD)
+- [x] 패턴 타입 정의 업데이트
+
+## Phase 16: 거래량 기반 신뢰도 보정
+- [x] Candle 타입에 volume 필드 (이미 존재)
+- [x] 거래량 평균 계산 함수 구현
+- [x] 패턴 신뢰도 보정 로직 (거래량 150% 이상 시 +20%)
+- [x] 가짜 신호 필터링 조건 3가지 적용
+
+## Phase 17: 패턴 필터링 UI 및 지표 커스터마이징
+- [ ] 신뢰도 필터 슬라이더 UI 추가
+- [ ] 패턴 타입별 토글 선택 기능
+- [ ] 지표 표시/숨김 커스터마이징
+- [ ] 필터 설정 저장 (AsyncStorage)
+

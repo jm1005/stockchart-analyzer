@@ -60,6 +60,14 @@ export interface PatternResult {
   description: string;
   signal: "bullish" | "bearish" | "neutral";
   targetPrice?: number;
+  volumeConfirmed?: boolean;
+}
+
+export interface DivergenceResult {
+  type: "rsi" | "macd";
+  signal: "bullish" | "bearish";
+  confidence: number;
+  description: string;
 }
 
 export type PatternType =
@@ -75,7 +83,10 @@ export type PatternType =
   | "bull_flag"
   | "bear_flag"
   | "rising_wedge"
-  | "falling_wedge";
+  | "falling_wedge"
+  | "flag_pennant"
+  | "rsi_divergence"
+  | "macd_divergence";
 
 export interface TechnicalIndicators {
   ma5: (number | null)[];
