@@ -19,6 +19,7 @@ import { PatternCard } from "@/components/chart/PatternCard";
 import { FinancialsTab } from "@/components/chart/FinancialsTab";
 import { AnalysisCommentsPanel } from "@/components/chart/AnalysisCommentsPanel";
 import { generateAllComments } from "@/lib/analysisComments";
+import { SignalBubble } from "@/components/chart/SignalBubble";
 import { useColors } from "@/hooks/use-colors";
 import { useWatchlist } from "@/hooks/useWatchlist";
 import { trpc } from "@/lib/trpc";
@@ -377,6 +378,18 @@ export default function ChartScreen() {
                     maxCandlesVisible={maxCandlesVisible}
                   />
                 )}
+              </View>
+            )}
+
+            {/* Overall Signal Bubble */}
+            {overallSignal && (
+              <View style={[{ backgroundColor: colors.surface, borderTopColor: colors.border, borderTopWidth: 1, paddingHorizontal: 8, paddingVertical: 8 }]}>
+                <SignalBubble
+                  signal={overallSignal.signal}
+                  targetPrice={undefined}
+                  currentPrice={chartData?.regularMarketPrice}
+                  confidence={overallSignal.score}
+                />
               </View>
             )}
 
