@@ -174,3 +174,17 @@
 - [x] Reanimated v3 최적화 (useDerivedValue)
 - [x] 줌 상태 유지 로직
 - [x] 성능 최적화 (useMemo, useCallback)
+
+
+## Phase 24: Twelve Data API 클라이언트 구현
+- [x] Twelve Data API 클라이언트 클래스 작성
+- [x] 다중 종목 지원 기능
+- [x] 시간대 처리 (KST/EST → ISO 8601)
+- [x] 데이터 샘플링 최적화
+- [x] 환경변수 기반 API 키 관리
+- [x] 에러 핸들링 및 재시도 로직
+
+## Phase 25: Alpha Vantage → Twelve Data 마이그레이션
+- [ ] 서버 API 엔드포인트 업데이트
+- [ ] 프론트엔드 데이터 포맷 호환성 검증
+- [ ] 기존 코드 제거 및 정리
