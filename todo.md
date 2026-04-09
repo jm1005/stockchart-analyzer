@@ -158,3 +158,19 @@
 - [ ] 이동평균선 이격도 검증
 - [ ] 가짜 반등 경고 문구 추가
 
+
+## Phase 22: Alpha Vantage API Python 데이터 수집 스크립트
+- [x] Alpha Vantage API 클라이언트 구현 (타입 힌트)
+- [x] TIME_SERIES_DAILY_ADJUSTED 데이터 파싱
+- [x] Pandas DataFrame 정규화
+- [x] 기술적 지표 계산 (MA5/20/60, RSI14)
+- [x] NaN 처리 로직 (min_periods=1)
+- [x] 에러 핸들링 및 재시도 로직
+- [x] React Native 호환 JSON 포맧맷
+## Phase 23: 고성능 핸치 줌 캠른드스튱 차트 개선
+- [x] GestureHandler 기반 핸치 줌 재구현
+- [x] 동적 인덱스 범위 계산 알고리즘
+- [x] 자동 Y축 스케일링
+- [x] Reanimated v3 최적화 (useDerivedValue)
+- [x] 줌 상태 유지 로직
+- [x] 성능 최적화 (useMemo, useCallback)
