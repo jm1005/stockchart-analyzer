@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { useColors } from "@/hooks/use-colors";
+import { StarRating } from "@/components/ui/StarRating";
 import type { AnalysisComment } from "@/lib/analysisComments";
 
 interface AnalysisCommentsPanelProps {
@@ -87,20 +88,9 @@ export function AnalysisCommentsPanel({ comments }: AnalysisCommentsPanelProps) 
           </Text>
 
           {/* Confidence */}
-          <View style={styles.confidenceBar}>
-            <View
-              style={[
-                styles.confidenceFill,
-                {
-                  width: `${comment.confidence * 100}%`,
-                  backgroundColor: getSignalColor(comment.signal),
-                },
-              ]}
-            />
+          <View style={styles.confidenceContainer}>
+            <StarRating rating={comment.confidence} size={12} showPercentage={true} />
           </View>
-          <Text style={[styles.confidenceText, { color: colors.muted }]}>
-            신뢰도: {(comment.confidence * 100).toFixed(0)}%
-          </Text>
         </View>
       ))}
     </ScrollView>
@@ -162,19 +152,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginBottom: 8,
   },
-  confidenceBar: {
-    height: 4,
-    backgroundColor: "rgba(0,0,0,0.1)",
-    borderRadius: 2,
-    marginBottom: 4,
-    overflow: "hidden",
-  },
-  confidenceFill: {
-    height: "100%",
-    borderRadius: 2,
-  },
-  confidenceText: {
-    fontSize: 10,
-    fontWeight: "600",
+  confidenceContainer: {
+    marginTop: 4,
   },
 });

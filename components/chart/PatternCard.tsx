@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useColors } from "@/hooks/use-colors";
+import { StarRating } from "@/components/ui/StarRating";
 import type { PatternResult } from "@/shared/stockTypes";
 
 const PATTERN_LABELS: Record<string, string> = {
@@ -93,17 +94,7 @@ export function PatternCard({ pattern, currency = "KRW" }: PatternCardProps) {
             {PATTERN_LABELS[pattern.type] ?? pattern.type}
           </Text>
           <View style={styles.confidenceRow}>
-            <View style={[styles.confidenceBar, { backgroundColor: colors.border }]}>
-              <View
-                style={[
-                  styles.confidenceFill,
-                  { width: `${confidencePct}%`, backgroundColor: signalColor },
-                ]}
-              />
-            </View>
-            <Text style={[styles.confidenceText, { color: colors.muted }]}>
-              신뢰도 {confidencePct}%
-            </Text>
+            <StarRating rating={pattern.confidence} size={14} showPercentage={true} />
           </View>
         </View>
         <View style={styles.cardRight}>
