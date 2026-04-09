@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useColors } from "@/hooks/use-colors";
 import { StarRating } from "@/components/ui/StarRating";
+import { PatternIcon } from "@/components/ui/PatternIcons";
+import { getPatternColor } from "@/lib/patternColorScheme";
 import type { PatternResult } from "@/shared/stockTypes";
 
 const PATTERN_LABELS: Record<string, string> = {
@@ -58,12 +60,9 @@ export function PatternCard({ pattern, currency = "KRW" }: PatternCardProps) {
   const colors = useColors();
   const [expanded, setExpanded] = useState(false);
 
-  const signalColor =
-    pattern.signal === "bullish"
-      ? colors.bullish
-      : pattern.signal === "bearish"
-      ? colors.bearish
-      : colors.muted;
+  // 패턴 타입별 색상 조회
+  const patternColor = getPatternColor(pattern.type);
+  const signalColor = patternColor.light;
 
   const signalLabel =
     pattern.signal === "bullish" ? "▲ 상승" : pattern.signal === "bearish" ? "▼ 하락" : "◆ 중립";
@@ -90,9 +89,12 @@ export function PatternCard({ pattern, currency = "KRW" }: PatternCardProps) {
     >
       <View style={styles.cardHeader}>
         <View style={styles.cardLeft}>
-          <Text style={[styles.patternName, { color: colors.foreground }]}>
-            {PATTERN_LABELS[pattern.type] ?? pattern.type}
-          </Text>
+          <View style={styles.iconRow}>
+            <PatternIcon type={pattern.type} size={20} color={signalColor} />
+            <Text style={[styles.patternName, { color: colors.foreground }]}>
+              {PATTERN_LABELS[pattern.type] ?? pattern.type}
+            </Text>
+          </View>
           <View style={styles.confidenceRow}>
             <StarRating rating={pattern.confidence} size={14} showPercentage={true} />
           </View>
@@ -136,13 +138,14 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
   },
   cardLeft: { flex: 1, gap: 6 },
-  cardRight: { alignItems: "flex-end", gap: 4 },
-  patternName: { fontSize: 14, fontWeight: "700" },
-  confidenceRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  cardRight: { alignItems: "flex-end", gap: 4, marginTop: 2 },
+  iconRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
+  patternName: { fontSize: 14, fontWeight: "700", flex: 1 },
+  confidenceRow: { flexDirection: "row", alignItems: "center", gap: 6, marginLeft: 28, marginTop: 2 },
   confidenceBar: {
     width: 80,
     height: 4,
@@ -153,11 +156,11 @@ const styles = StyleSheet.create({
   confidenceText: { fontSize: 11 },
   signalBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 8,
   },
-  signalText: { fontSize: 11, fontWeight: "700" },
-  expandIcon: { fontSize: 10, marginTop: 2 },
+  signalText: { fontSize: 10, fontWeight: "600" },
+  expandIcon: { fontSize: 10 },
   expandedContent: { marginTop: 10, gap: 8 },
   description: { fontSize: 13, lineHeight: 20 },
   targetRow: {
