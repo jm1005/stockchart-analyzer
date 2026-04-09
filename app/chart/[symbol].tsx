@@ -19,7 +19,7 @@ import { PatternCard } from "@/components/chart/PatternCard";
 import { FinancialsTab } from "@/components/chart/FinancialsTab";
 import { AnalysisCommentsPanel } from "@/components/chart/AnalysisCommentsPanel";
 import { generateAllComments } from "@/lib/analysisComments";
-import { SignalBubble } from "@/components/chart/SignalBubble";
+
 import { useColors } from "@/hooks/use-colors";
 import { useWatchlist } from "@/hooks/useWatchlist";
 import { trpc } from "@/lib/trpc";
@@ -381,15 +381,60 @@ export default function ChartScreen() {
               </View>
             )}
 
-            {/* Overall Signal Bubble */}
-            {overallSignal && (
-              <View style={[{ backgroundColor: colors.surface, borderTopColor: colors.border, borderTopWidth: 1, paddingHorizontal: 8, paddingVertical: 8 }]}>
-                <SignalBubble
-                  signal={overallSignal.signal}
-                  targetPrice={undefined}
-                  currentPrice={chartData?.regularMarketPrice}
-                  confidence={overallSignal.score}
-                />
+            {/* ①번 지지/저항 레벨 */}
+            {supportResistance.length > 0 && (
+              <View style={[styles.srContainer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+                <Text style={[styles.srTitle, { color: colors.foreground }]}>① 지지/저항 레벨</Text>
+                {supportResistance.slice(0, 2).map((sr, i) => (
+                  <View key={i} style={[styles.srItem, { borderBottomColor: colors.border }]}>
+                    <View style={styles.srInfo}>
+                      <Text style={[styles.srLabel, { color: colors.muted }]}>
+                        {sr.type === "support" ? "지지" : "저항"} - {sr.strength.toFixed(0)}% 신뢰도
+                      </Text>
+                      <Text style={[styles.srPrice, { color: colors.foreground }]}>{sr.price.toFixed(0)}</Text>
+                    </View>
+                    <View style={[styles.confidenceBar, { backgroundColor: colors.border }]}>
+                      <View
+                        style={[
+                          styles.confidenceFill,
+                          {
+                            width: `${sr.strength}%`,
+                            backgroundColor: sr.type === "support" ? colors.success : colors.error,
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* ②번 강약 패턴 */}
+            {patterns.length > 0 && (
+              <View style={[styles.patternContainer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+                <Text style={[styles.patternTitle, { color: colors.foreground }]}>② 강약 패턴</Text>
+                {patterns.slice(0, 3).map((pattern, i) => (
+                  <View key={i} style={[styles.patternItem, { borderBottomColor: colors.border }]}>
+                    <View style={styles.patternInfo}>
+                      <Text style={[styles.patternName, { color: colors.foreground }]}>{pattern.type}</Text>
+                      <Text style={[styles.patternSignal, { color: pattern.signal === "bullish" ? colors.bullish : colors.bearish }]}>
+                        {pattern.signal === "bullish" ? "▲ 상승" : "▼ 하락"}
+                      </Text>
+                    </View>
+                    <View style={[styles.confidenceBar, { backgroundColor: colors.border }]}>
+                      <View
+                        style={[
+                          styles.confidenceFill,
+                          {
+                            width: `${pattern.confidence * 100}%`,
+                            backgroundColor: pattern.signal === "bullish" ? colors.bullish : colors.bearish,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={[styles.confidenceText, { color: colors.muted }]}>{(pattern.confidence * 100).toFixed(0)}%</Text>
+                  </View>
+                ))}
               </View>
             )}
 
@@ -577,5 +622,75 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     marginBottom: 8,
+  },
+  srContainer: {
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+  },
+  srTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  srItem: {
+    marginBottom: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+  },
+  srInfo: {
+    marginBottom: 6,
+  },
+  srLabel: {
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  srPrice: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  confidenceBar: {
+    height: 6,
+    borderRadius: 3,
+    overflow: "hidden" as const,
+  },
+  confidenceFill: {
+    height: "100%" as const,
+    borderRadius: 3,
+  },
+  confidenceText: {
+    fontSize: 11,
+    marginTop: 4,
+  },
+  patternContainer: {
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+  },
+  patternTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  patternItem: {
+    marginBottom: 8,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+  },
+  patternInfo: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "center" as const,
+    marginBottom: 6,
+  },
+  patternName: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  patternSignal: {
+    fontSize: 12,
+    fontWeight: "600",
   },
 });
