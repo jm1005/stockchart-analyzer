@@ -17,6 +17,8 @@ import { RSIChart } from "@/components/chart/RSIChart";
 import { MACDChart } from "@/components/chart/MACDChart";
 import { PatternCard } from "@/components/chart/PatternCard";
 import { FinancialsTab } from "@/components/chart/FinancialsTab";
+import { AnalysisCommentsPanel } from "@/components/chart/AnalysisCommentsPanel";
+import { generateAllComments } from "@/lib/analysisComments";
 import { useColors } from "@/hooks/use-colors";
 import { useWatchlist } from "@/hooks/useWatchlist";
 import { trpc } from "@/lib/trpc";
@@ -45,7 +47,7 @@ export default function ChartScreen() {
 
   const [period, setPeriod] = useState<Period>("3M");
   const [subChart, setSubChart] = useState<SubChart>("none");
-  const [activeTab, setActiveTab] = useState<"chart" | "financials">("chart");
+  const [activeTab, setActiveTab] = useState<"chart" | "financials" | "analysis">("chart");
   const [scrollEnabled, setScrollEnabled] = useState(true);
   const [activeIndicators, setActiveIndicators] = useState({
     ma5: false,
@@ -189,25 +191,33 @@ export default function ChartScreen() {
         </View>
       )}
 
-      {/* Tab Selection */}
-      <View style={[styles.tabRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          onPress={() => setActiveTab("chart")}
-          style={[styles.tabButton, activeTab === "chart" && { borderBottomColor: colors.primary, borderBottomWidth: 3 }]}
-        >
-          <Text style={[styles.tabText, { color: activeTab === "chart" ? colors.primary : colors.muted }]}>
-            차트
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setActiveTab("financials")}
-          style={[styles.tabButton, activeTab === "financials" && { borderBottomColor: colors.primary, borderBottomWidth: 3 }]}
-        >
-          <Text style={[styles.tabText, { color: activeTab === "financials" ? colors.primary : colors.muted }]}>
-            재무
-          </Text>
-        </TouchableOpacity>
-      </View>
+        {/* Tab Selection */}
+        <View style={[styles.tabRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+          <TouchableOpacity
+            onPress={() => setActiveTab("chart")}
+            style={[styles.tabButton, activeTab === "chart" && { borderBottomColor: colors.primary, borderBottomWidth: 3 }]}
+          >
+            <Text style={[styles.tabText, { color: activeTab === "chart" ? colors.primary : colors.muted }]}>
+              차트
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setActiveTab("analysis")}
+            style={[styles.tabButton, activeTab === "analysis" && { borderBottomColor: colors.primary, borderBottomWidth: 3 }]}
+          >
+            <Text style={[styles.tabText, { color: activeTab === "analysis" ? colors.primary : colors.muted }]}>
+              분석
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setActiveTab("financials")}
+            style={[styles.tabButton, activeTab === "financials" && { borderBottomColor: colors.primary, borderBottomWidth: 3 }]}
+          >
+            <Text style={[styles.tabText, { color: activeTab === "financials" ? colors.primary : colors.muted }]}>
+              재무
+            </Text>
+          </TouchableOpacity>
+        </View>
 
       <ScrollView showsVerticalScrollIndicator={false} scrollEnabled={scrollEnabled}>
         {/* Chart Tab */}
@@ -274,6 +284,8 @@ export default function ChartScreen() {
                     candles={chartData.candles}
                     width={CHART_WIDTH}
                     height={60}
+                    zoomOffset={zoom.offsetX}
+                    maxCandlesVisible={maxCandlesVisible}
                   />
                 </>
               ) : (
@@ -378,6 +390,15 @@ export default function ChartScreen() {
               </View>
             )}
           </>
+        )}
+
+        {/* Analysis Tab */}
+        {activeTab === "analysis" && chartData && indicators && (
+          <View style={{ height: 600 }}>
+            <AnalysisCommentsPanel
+              comments={generateAllComments(indicators, chartData.candles, supportResistance, patterns)}
+            />
+          </View>
         )}
 
         {/* Financials Tab */}
