@@ -1,23 +1,10 @@
-import React, { useState, useMemo, useCallback, useRef } from "react";
-import { View, Text, StyleSheet, Dimensions } from "react-native";
+import React, { useMemo, useCallback, useState } from "react";
+import { View, Text, StyleSheet, Dimensions, PanResponder } from "react-native";
 import Svg, { Rect, Line, G, Path, Text as SvgText } from "react-native-svg";
-import { GestureDetector, Gesture } from "react-native-gesture-handler";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  runOnJS,
-} from "react-native-reanimated";
 import { useColors } from "@/hooks/use-colors";
 import type { Candle, SupportResistanceLevel, PatternResult, TechnicalIndicators } from "@/shared/stockTypes";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-
-interface ZoomState {
-  scale: number;
-  offsetX: number;
-  maxOffsetX: number;
-}
 
 interface CandlestickChartProps {
   candles: Candle[];
@@ -33,10 +20,6 @@ interface CandlestickChartProps {
   width?: number;
   height?: number;
   currency?: string;
-  zoom?: ZoomState;
-  onPan?: (deltaX: number) => void;
-  onZoomChange?: (scale: number) => void;
-  maxCandlesVisible?: number;
 }
 
 export function CandlestickChart({
@@ -48,34 +31,18 @@ export function CandlestickChart({
   width = SCREEN_WIDTH - 16,
   height = 300,
   currency = "KRW",
-  zoom,
-  onPan,
-  onZoomChange,
-  maxCandlesVisible: propMaxCandlesVisible,
 }: CandlestickChartProps) {
   const colors = useColors();
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [localScale, setLocalScale] = useState(1);
-  const [localOffsetX, setLocalOffsetX] = useState(0);
-  
-  // Animated values for smooth gesture handling
-  const scaleAnim = useSharedValue(1);
-  const offsetXAnim = useSharedValue(0);
 
   const PADDING = { top: 16, right: 60, bottom: 8, left: 8 };
   const chartWidth = width - PADDING.left - PADDING.right;
   const chartHeight = height - PADDING.top - PADDING.bottom;
 
-  // 기본값 설정 (props가 없을 경우)
-  const currentZoom = zoom || { scale: localScale, offsetX: localOffsetX, maxOffsetX: 0 };
-  const maxCandlesVisible = propMaxCandlesVisible || 60;
-
-  // 표시할 캔들 계산 (줌 + 오프셋 고려)
   const visibleCandles = useMemo(() => {
-    const startIdx = Math.floor(currentZoom.offsetX);
-    const endIdx = Math.min(startIdx + maxCandlesVisible, candles.length);
-    return candles.slice(startIdx, endIdx);
-  }, [candles, currentZoom.offsetX, maxCandlesVisible]);
+    if (candles.length <= 60) return candles;
+    return candles.slice(candles.length - 60);
+  }, [candles]);
 
   const { minPrice, maxPrice, priceRange } = useMemo(() => {
     if (visibleCandles.length === 0) return { minPrice: 0, maxPrice: 100, priceRange: 100 };
@@ -85,12 +52,13 @@ export function CandlestickChart({
       if (c.low < min) min = c.low;
       if (c.high > max) max = c.high;
     }
+    // Add SR levels to range
     for (const sr of supportResistance) {
       if (sr.price < min) min = sr.price;
       if (sr.price > max) max = sr.price;
     }
     const padding = (max - min) * 0.05;
-    return { minPrice: min - padding, maxPrice: max + padding, priceRange: (max - min) * 1.1 };
+    return { minPrice: min - padding, maxPrice: max + padding, priceRange: max - min + padding * 2 };
   }, [visibleCandles, supportResistance]);
 
   const toY = useCallback(
@@ -100,76 +68,36 @@ export function CandlestickChart({
   );
 
   const candleWidth = Math.max(2, chartWidth / visibleCandles.length - 1);
-  const offset = Math.floor(currentZoom.offsetX);
+  const offset = candles.length > 60 ? candles.length - 60 : 0;
 
   const toX = useCallback(
-    (index: number) => {
-      const relativeIdx = index - offset;
-      return PADDING.left + (relativeIdx / maxCandlesVisible) * chartWidth + candleWidth / 2;
-    },
-    [offset, chartWidth, maxCandlesVisible, candleWidth, PADDING.left]
+    (index: number) =>
+      PADDING.left + (index - offset) * (chartWidth / visibleCandles.length) + candleWidth / 2,
+    [offset, chartWidth, visibleCandles.length, candleWidth, PADDING.left]
   );
 
-  // 핀치 줌 제스처
-  const pinchGesture = Gesture.Pinch()
-    .onUpdate((event) => {
-      const newScale = Math.max(1, Math.min(5, event.scale));
-      scaleAnim.value = newScale;
-      setLocalScale(newScale);
-      if (onZoomChange) {
-        runOnJS(onZoomChange)(newScale);
-      }
-    })
-    .onEnd(() => {
-      // 줌 애니메이션 (부드러운 종료)
-      scaleAnim.value = withTiming(localScale, { duration: 200 });
-    });
-
-  // 팬 제스처 (줌 상태에서만 활성화)
-  const panGesture = Gesture.Pan()
-    .onUpdate((event) => {
-      if (localScale > 1.05) {
-        offsetXAnim.value = event.translationX;
-        const normalizedDelta = -event.translationX / (chartWidth / maxCandlesVisible);
-        const newOffset = Math.max(0, Math.min(candles.length - maxCandlesVisible, currentZoom.offsetX + normalizedDelta));
-        setLocalOffsetX(newOffset);
-        if (onPan) {
-          runOnJS(onPan)(event.translationX);
-        }
-      }
-    })
-    .onEnd(() => {
-      offsetXAnim.value = withTiming(0, { duration: 200 });
-    });
-
-  // 더블탭 제스처 (줌 리셋)
-  const doubleTapGesture = Gesture.Tap()
-    .numberOfTaps(2)
-    .onEnd(() => {
-      setLocalScale(1);
-      setLocalOffsetX(0);
-      scaleAnim.value = withTiming(1, { duration: 300 });
-      offsetXAnim.value = withTiming(0, { duration: 300 });
-      if (onZoomChange) {
-        runOnJS(onZoomChange)(1);
-      }
-    });
-
-  // 싱글탭 제스처 (크로스헤어 선택)
-  const singleTapGesture = Gesture.Tap()
-    .numberOfTaps(1)
-    .onEnd((event) => {
-      const x = event.x - PADDING.left;
-      const idx = Math.round((x / chartWidth) * (visibleCandles.length - 1));
-      const clampedIdx = Math.max(0, Math.min(visibleCandles.length - 1, idx));
-      runOnJS(setSelectedIndex)(offset + clampedIdx);
-      setTimeout(() => runOnJS(setSelectedIndex)(null), 2000);
-    });
-
-  // 제스처 조합
-  const composedGesture = Gesture.Simultaneous(
-    pinchGesture,
-    Gesture.Simultaneous(panGesture, Gesture.Exclusive(doubleTapGesture, singleTapGesture))
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (e) => {
+          const x = e.nativeEvent.locationX - PADDING.left;
+          const idx = Math.round((x / chartWidth) * (visibleCandles.length - 1));
+          const clampedIdx = Math.max(0, Math.min(visibleCandles.length - 1, idx));
+          setSelectedIndex(offset + clampedIdx);
+        },
+        onPanResponderMove: (e) => {
+          const x = e.nativeEvent.locationX - PADDING.left;
+          const idx = Math.round((x / chartWidth) * (visibleCandles.length - 1));
+          const clampedIdx = Math.max(0, Math.min(visibleCandles.length - 1, idx));
+          setSelectedIndex(offset + clampedIdx);
+        },
+        onPanResponderRelease: () => {
+          setTimeout(() => setSelectedIndex(null), 2000);
+        },
+      }),
+    [chartWidth, visibleCandles.length, offset, PADDING.left]
   );
 
   const selectedCandle = selectedIndex != null ? candles[selectedIndex] : null;
@@ -197,10 +125,6 @@ export function CandlestickChart({
     });
   }, [minPrice, priceRange, toY]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scaleAnim.value }, { translateX: offsetXAnim.value }],
-  }));
-
   return (
     <View style={[styles.container, { width, height }]}>
       {/* OHLCV Info Bar */}
@@ -224,269 +148,225 @@ export function CandlestickChart({
         </View>
       ) : null}
 
-      {/* Zoom Level Indicator */}
-      {localScale > 1.05 && (
-        <View style={[styles.zoomIndicator, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.zoomText, { color: colors.muted }]}>
-            🔍 {localScale.toFixed(1)}x
-          </Text>
-        </View>
-      )}
+      <View {...panResponder.panHandlers}>
+        <Svg width={width} height={height}>
+          {/* Y-axis grid lines and labels */}
+          {yLabels.map((label, i) => (
+            <G key={i}>
+              <Line
+                x1={PADDING.left}
+                y1={label.y}
+                x2={width - PADDING.right}
+                y2={label.y}
+                stroke={colors.border}
+                strokeWidth={0.5}
+                strokeDasharray="4,4"
+              />
+              <SvgText
+                x={width - PADDING.right + 4}
+                y={label.y + 4}
+                fontSize={9}
+                fill={colors.muted}
+              >
+                {formatPrice(label.price)}
+              </SvgText>
+            </G>
+          ))}
 
-      <GestureDetector gesture={composedGesture}>
-        <Animated.View style={[animatedStyle, { width, height }]}>
-          <Svg width={width} height={height}>
-            {/* Y-axis grid lines and labels */}
-            {yLabels.map((label, i) => (
-              <G key={i}>
-                <Line
-                  x1={PADDING.left}
-                  y1={label.y}
-                  x2={width - PADDING.right}
-                  y2={label.y}
-                  stroke={colors.border}
-                  strokeWidth="0.5"
-                  opacity="0.3"
-                />
-                <SvgText
-                  x={width - PADDING.right + 4}
-                  y={label.y + 4}
-                  fontSize="10"
-                  fill={colors.muted}
-                >
-                  {formatPrice(label.price)}
-                </SvgText>
-              </G>
-            ))}
-
-            {/* Support/Resistance Lines */}
-            {supportResistance.map((sr, i) => (
+          {/* Support & Resistance Lines */}
+          {supportResistance.map((sr, i) => {
+            const y = toY(sr.price);
+            if (y < PADDING.top || y > height - PADDING.bottom) return null;
+            const color = sr.type === "support" ? colors.support : colors.resistance;
+            return (
               <G key={`sr-${i}`}>
                 <Line
                   x1={PADDING.left}
-                  y1={toY(sr.price)}
+                  y1={y}
                   x2={width - PADDING.right}
-                  y2={toY(sr.price)}
-                  stroke={sr.type === "support" ? colors.support : colors.resistance}
-                  strokeWidth="1"
-                  strokeDasharray="4,2"
-                  opacity={Math.min(0.3 + sr.strength * 0.4, 0.8)}
+                  y2={y}
+                  stroke={color}
+                  strokeWidth={1.5}
+                  strokeDasharray="6,3"
+                  opacity={0.8}
                 />
+                <SvgText
+                  x={width - PADDING.right + 4}
+                  y={y - 2}
+                  fontSize={8}
+                  fill={color}
+                  fontWeight="600"
+                >
+                  {sr.type === "support" ? "S" : "R"}
+                </SvgText>
               </G>
-            ))}
+            );
+          })}
 
-            {/* Candles */}
-            {visibleCandles.map((candle, i) => {
-              const x = toX(offset + i);
-              const openY = toY(candle.open);
-              const closeY = toY(candle.close);
-              const highY = toY(candle.high);
-              const lowY = toY(candle.low);
-              const isGreen = candle.close >= candle.open;
-              const bodyTop = Math.min(openY, closeY);
-              const bodyHeight = Math.abs(closeY - openY) || 1;
+          {/* Bollinger Bands */}
+          {indicators && activeIndicators.bb && (() => {
+            const bb = indicators.bollingerBands;
+            const upperPath: string[] = [];
+            const lowerPath: string[] = [];
+            let upperStarted = false;
+            let lowerStarted = false;
 
-              return (
-                <G key={i}>
-                  {/* Wick */}
+            for (let i = offset; i < candles.length; i++) {
+              const upper = bb.upper[i];
+              const lower = bb.lower[i];
+              const x = toX(i);
+              if (upper != null) {
+                const y = toY(upper);
+                if (!upperStarted) { upperPath.push(`M ${x} ${y}`); upperStarted = true; }
+                else upperPath.push(`L ${x} ${y}`);
+              }
+              if (lower != null) {
+                const y = toY(lower);
+                if (!lowerStarted) { lowerPath.push(`M ${x} ${y}`); lowerStarted = true; }
+                else lowerPath.push(`L ${x} ${y}`);
+              }
+            }
+            return (
+              <G>
+                <Path d={upperPath.join(" ")} stroke="#8B5CF6" strokeWidth={1} fill="none" opacity={0.6} />
+                <Path d={lowerPath.join(" ")} stroke="#8B5CF6" strokeWidth={1} fill="none" opacity={0.6} />
+              </G>
+            );
+          })()}
+
+          {/* MA Lines */}
+          {indicators && (
+            <>
+              {activeIndicators.ma5 && renderMALine(indicators.ma5, offset, candles.length, toX, toY, "#F59E0B")}
+              {activeIndicators.ma20 && renderMALine(indicators.ma20, offset, candles.length, toX, toY, "#3B82F6")}
+              {activeIndicators.ma60 && renderMALine(indicators.ma60, offset, candles.length, toX, toY, "#EC4899")}
+            </>
+          )}
+
+          {/* Candlesticks */}
+          {visibleCandles.map((candle, visIdx) => {
+            const i = offset + visIdx;
+            const x = toX(i);
+            const openY = toY(candle.open);
+            const closeY = toY(candle.close);
+            const highY = toY(candle.high);
+            const lowY = toY(candle.low);
+            const isBullish = candle.close >= candle.open;
+            const color = isBullish ? colors.bullish : colors.bearish;
+            const bodyTop = Math.min(openY, closeY);
+            const bodyHeight = Math.max(1, Math.abs(closeY - openY));
+            const isSelected = selectedIndex === i;
+
+            return (
+              <G key={i}>
+                {/* Wick */}
+                <Line
+                  x1={x}
+                  y1={highY}
+                  x2={x}
+                  y2={lowY}
+                  stroke={color}
+                  strokeWidth={1}
+                  opacity={isSelected ? 1 : 0.9}
+                />
+                {/* Body */}
+                <Rect
+                  x={x - candleWidth / 2}
+                  y={bodyTop}
+                  width={candleWidth}
+                  height={bodyHeight}
+                  fill={isBullish ? color : color}
+                  opacity={isSelected ? 1 : 0.85}
+                  rx={1}
+                />
+                {/* Selection highlight */}
+                {isSelected && (
                   <Line
                     x1={x}
-                    y1={highY}
+                    y1={PADDING.top}
                     x2={x}
-                    y2={lowY}
-                    stroke={isGreen ? colors.bullish : colors.bearish}
-                    strokeWidth="0.5"
+                    y2={height - PADDING.bottom}
+                    stroke={colors.muted}
+                    strokeWidth={1}
+                    strokeDasharray="3,3"
+                    opacity={0.5}
                   />
-                  {/* Body */}
-                  <Rect
-                    x={x - candleWidth / 2}
-                    y={bodyTop}
-                    width={candleWidth}
-                    height={bodyHeight}
-                    fill={isGreen ? colors.bullish : colors.bearish}
-                    opacity={0.8}
-                  />
-                </G>
-              );
-            })}
-
-            {/* MA Indicators */}
-            {activeIndicators?.ma5 && indicators && (
-              <Path
-                d={indicators.ma5
-                  .slice(offset, offset + maxCandlesVisible)
-                  .map((price: number | null, i: number) => {
-                    if (price === null) return "";
-                    const x = toX(offset + i);
-                    const y = toY(price);
-                    return `${i === 0 ? "M" : "L"} ${x} ${y}`;
-                  })
-                  .filter(Boolean)
-                  .join(" ")}
-                stroke="#F59E0B"
-                strokeWidth="1"
-                fill="none"
-              />
-            )}
-            {activeIndicators?.ma20 && indicators && (
-              <Path
-                d={indicators.ma20
-                  .slice(offset, offset + maxCandlesVisible)
-                  .map((price: number | null, i: number) => {
-                    if (price === null) return "";
-                    const x = toX(offset + i);
-                    const y = toY(price);
-                    return `${i === 0 ? "M" : "L"} ${x} ${y}`;
-                  })
-                  .filter(Boolean)
-                  .join(" ")}
-                stroke="#3B82F6"
-                strokeWidth="1"
-                fill="none"
-              />
-            )}
-            {activeIndicators?.ma60 && indicators && (
-              <Path
-                d={indicators.ma60
-                  .slice(offset, offset + maxCandlesVisible)
-                  .map((price: number | null, i: number) => {
-                    if (price === null) return "";
-                    const x = toX(offset + i);
-                    const y = toY(price);
-                    return `${i === 0 ? "M" : "L"} ${x} ${y}`;
-                  })
-                  .filter(Boolean)
-                  .join(" ")}
-                stroke="#EC4899"
-                strokeWidth="1"
-                fill="none"
-              />
-            )}
-
-            {/* Bollinger Bands */}
-            {activeIndicators?.bb && indicators && (
-              <>
-                <Path
-                  d={indicators.bollingerBands.upper
-                    .slice(offset, offset + maxCandlesVisible)
-                    .map((price: number | null, i: number) => {
-                      if (price === null) return "";
-                      const x = toX(offset + i);
-                      const y = toY(price);
-                      return `${i === 0 ? "M" : "L"} ${x} ${y}`;
-                    })
-                    .filter(Boolean)
-                    .join(" ")}
-                  stroke="#8B5CF6"
-                  strokeWidth="0.5"
-                  fill="none"
-                  opacity="0.5"
-                />
-                <Path
-                  d={indicators.bollingerBands.lower
-                    .slice(offset, offset + maxCandlesVisible)
-                    .map((price: number | null, i: number) => {
-                      if (price === null) return "";
-                      const x = toX(offset + i);
-                      const y = toY(price);
-                      return `${i === 0 ? "M" : "L"} ${x} ${y}`;
-                    })
-                    .filter(Boolean)
-                    .join(" ")}
-                  stroke="#8B5CF6"
-                  strokeWidth="0.5"
-                  fill="none"
-                  opacity="0.5"
-                />
-              </>
-            )}
-
-            {/* Pattern Markers */}
-            {patterns.map((pattern, i) => {
-              const startIdx = pattern.startIndex;
-              const endIdx = pattern.endIndex;
-              if (startIdx < offset || endIdx > offset + maxCandlesVisible) return null;
-              const x1 = toX(startIdx);
-              const x2 = toX(endIdx);
-              const y = PADDING.top + 12;
-              return (
-                <G key={`pattern-${i}`}>
-                  <Rect
-                    x={Math.min(x1, x2) - 4}
-                    y={y - 6}
-                    width={Math.abs(x2 - x1) + 8}
-                    height={12}
-                    fill={pattern.confidence > 0.7 ? colors.bullish : colors.warning}
-                    opacity="0.2"
-                    rx="2"
-                  />
-                  <SvgText
-                    x={(x1 + x2) / 2}
-                    y={y + 2}
-                    fontSize="9"
-                    fill={colors.foreground}
-                    textAnchor="middle"
-                  >
-                    {pattern.type.substring(0, 3)}
-                  </SvgText>
-                </G>
-              );
-            })}
-
-            {/* Crosshair */}
-            {selectedIndex != null && (
-              <G>
-                <Line
-                  x1={PADDING.left}
-                  y1={toY(selectedCandle?.close ?? (minPrice + maxPrice) / 2)}
-                  x2={width - PADDING.right}
-                  y2={toY(selectedCandle?.close ?? (minPrice + maxPrice) / 2)}
-                  stroke={colors.primary}
-                  strokeWidth="0.5"
-                  opacity="0.5"
-                  strokeDasharray="2,2"
-                />
+                )}
               </G>
-            )}
-          </Svg>
-        </Animated.View>
-      </GestureDetector>
+            );
+          })}
+
+          {/* Pattern markers */}
+          {patterns.map((pattern, i) => {
+            const endIdx = Math.min(pattern.endIndex, candles.length - 1);
+            const x = toX(endIdx);
+            const y = PADDING.top + 8;
+            const patternColor = pattern.signal === "bullish" ? colors.bullish : pattern.signal === "bearish" ? colors.bearish : colors.muted;
+            return (
+              <G key={`pattern-${i}`}>
+                <Rect
+                  x={x - 12}
+                  y={y - 8}
+                  width={24}
+                  height={14}
+                  fill={patternColor}
+                  opacity={0.85}
+                  rx={3}
+                />
+                <SvgText
+                  x={x}
+                  y={y + 2}
+                  fontSize={7}
+                  fill="#fff"
+                  textAnchor="middle"
+                  fontWeight="700"
+                >
+                  {pattern.signal === "bullish" ? "▲" : pattern.signal === "bearish" ? "▼" : "◆"}
+                </SvgText>
+              </G>
+            );
+          })}
+        </Svg>
+      </View>
     </View>
   );
 }
 
+function renderMALine(
+  maData: (number | null)[],
+  offset: number,
+  total: number,
+  toX: (i: number) => number,
+  toY: (price: number) => number,
+  color: string
+) {
+  const pathParts: string[] = [];
+  let started = false;
+  for (let i = offset; i < total; i++) {
+    const val = maData[i];
+    if (val == null) { started = false; continue; }
+    const x = toX(i);
+    const y = toY(val);
+    if (!started) { pathParts.push(`M ${x} ${y}`); started = true; }
+    else pathParts.push(`L ${x} ${y}`);
+  }
+  if (pathParts.length === 0) return null;
+  return <Path key={color} d={pathParts.join(" ")} stroke={color} strokeWidth={1.5} fill="none" opacity={0.8} />;
+}
+
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "transparent",
     overflow: "hidden",
   },
   infoBar: {
-    position: "absolute",
-    top: 4,
-    left: 8,
-    right: 8,
-    zIndex: 10,
     flexDirection: "row",
-    gap: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4,
+    gap: 8,
+    flexWrap: "wrap",
   },
   infoText: {
     fontSize: 10,
-    fontWeight: "600",
-  },
-  zoomIndicator: {
-    position: "absolute",
-    top: 4,
-    right: 8,
-    zIndex: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  zoomText: {
-    fontSize: 12,
-    fontWeight: "600",
+    fontWeight: "500",
   },
 });

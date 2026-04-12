@@ -1,5 +1,4 @@
-import type { Candle, PatternResult, SupportResistanceLevel, TechnicalIndicators } from "@/shared/stockTypes";
-import { detectFlagPennant, detectRSIDivergence, detectMACDDivergence, adjustConfidenceByVolume, filterFakeoutPatterns } from "./advancedPatterns";
+import type { Candle, SupportResistanceLevel, PatternResult, TechnicalIndicators } from "@/shared/stockTypes";
 
 // ─────────────────────────────────────────────
 // Moving Average
@@ -409,7 +408,6 @@ export function detectPatterns(candles: Candle[]): PatternResult[] {
     const bounce = (bounceHigh - currentLow) / currentLow;
     if (bounce < 0.03 || bounce > 0.15) continue;
 
-    const targetPrice = currentLow - (recentHigh - currentLow) * 0.5;
     patterns.push({
       type: "dead_cat_bounce",
       confidence: 0.55,
@@ -417,7 +415,6 @@ export function detectPatterns(candles: Candle[]): PatternResult[] {
       endIndex: Math.min(i + 10, closes.length - 1),
       description: "데드캣 바운스 - 급락 후 일시적 반등, 추가 하락 가능",
       signal: "bearish",
-      targetPrice,
     });
     break;
   }
@@ -470,35 +467,9 @@ export function detectPatterns(candles: Candle[]): PatternResult[] {
     }
   }
 
-  // Validate signal direction matches target price
-  const currentPrice = closes[closes.length - 1];
-  const validatedPatterns = patterns.map((p) => {
-    if (p.targetPrice === undefined) return p;
-    
-    // 목표가가 현재가보다 높으면 상승(bullish), 낮으면 하락(bearish)
-    const expectedSignal = p.targetPrice > currentPrice ? "bullish" : "bearish";
-    
-    // 신호와 목표가 방향이 불일치하면 신호 교정
-    if (p.signal !== expectedSignal) {
-      return { ...p, signal: expectedSignal as "bullish" | "bearish" | "neutral" };
-    }
-    return p;
-  });
-
-  // Flag & Pennant 패턴 추가
-  const flagPatterns = detectFlagPennant(candles);
-  patterns.push(...flagPatterns);
-
-  // 거래량 기반 신뢰도 보정
-  const volumeAdjustedPatterns = validatedPatterns.map((p) => adjustConfidenceByVolume(p, candles));
-  patterns.push(...volumeAdjustedPatterns);
-
-  // 가짜 신호 필터링
-  const filteredPatterns = filterFakeoutPatterns(patterns);
-
   // Remove duplicates (keep highest confidence)
   const seen = new Set<string>();
-  return (filteredPatterns as PatternResult[])
+  return patterns
     .sort((a, b) => b.confidence - a.confidence)
     .filter((p) => {
       if (seen.has(p.type)) return false;
@@ -548,46 +519,4 @@ export function getOverallSignal(
     score,
     reasons,
   };
-}
-
-
-// ─────────────────────────────────────────────
-// Divergence Detection
-// ─────────────────────────────────────────────
-export function detectDivergences(
-  candles: Candle[],
-  indicators: TechnicalIndicators
-): PatternResult[] {
-  if (candles.length < 30) return [];
-
-  const closes = candles.map((c) => c.close);
-  const patterns: PatternResult[] = [];
-
-  // RSI Divergence
-  const rsiDivergences = detectRSIDivergence(candles, indicators.rsi);
-  rsiDivergences.forEach((div) => {
-    patterns.push({
-      type: "rsi_divergence",
-      confidence: div.confidence,
-      startIndex: Math.max(0, candles.length - 20),
-      endIndex: candles.length - 1,
-      description: div.description,
-      signal: div.signal,
-    });
-  });
-
-  // MACD Divergence
-  const macdDivergences = detectMACDDivergence(candles, indicators.macd.macd, closes);
-  macdDivergences.forEach((div) => {
-    patterns.push({
-      type: "macd_divergence",
-      confidence: div.confidence,
-      startIndex: Math.max(0, candles.length - 20),
-      endIndex: candles.length - 1,
-      description: div.description,
-      signal: div.signal,
-    });
-  });
-
-  return patterns;
 }

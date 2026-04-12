@@ -48,13 +48,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={26} name="star.fill" color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="portfolio"
-        options={{
-          title: "포트폴리오",
-          tabBarIcon: ({ color }) => <IconSymbol size={26} name="chart.bar.fill" color={color} />,
-        }}
-      />
     </Tabs>
   );
 }

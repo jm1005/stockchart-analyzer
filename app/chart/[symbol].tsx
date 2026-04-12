@@ -16,10 +16,6 @@ import { VolumeChart } from "@/components/chart/VolumeChart";
 import { RSIChart } from "@/components/chart/RSIChart";
 import { MACDChart } from "@/components/chart/MACDChart";
 import { PatternCard } from "@/components/chart/PatternCard";
-import { FinancialsTab } from "@/components/chart/FinancialsTab";
-import { AnalysisCommentsPanel } from "@/components/chart/AnalysisCommentsPanel";
-import { generateAllComments } from "@/lib/analysisComments";
-import { SignalBubble } from "@/components/chart/SignalBubble";
 import { useColors } from "@/hooks/use-colors";
 import { useWatchlist } from "@/hooks/useWatchlist";
 import { trpc } from "@/lib/trpc";
@@ -31,7 +27,6 @@ import {
 } from "@/lib/technicalAnalysis";
 import type { Period } from "@/shared/stockTypes";
 import * as Haptics from "expo-haptics";
-import { useChartZoom } from "@/hooks/useChartZoom";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CHART_WIDTH = SCREEN_WIDTH - 16;
@@ -48,8 +43,6 @@ export default function ChartScreen() {
 
   const [period, setPeriod] = useState<Period>("3M");
   const [subChart, setSubChart] = useState<SubChart>("none");
-  const [activeTab, setActiveTab] = useState<"chart" | "financials" | "analysis">("chart");
-  const [scrollEnabled, setScrollEnabled] = useState(true);
   const [activeIndicators, setActiveIndicators] = useState({
     ma5: false,
     ma20: true,
@@ -65,17 +58,6 @@ export default function ChartScreen() {
   const { data: quote } = trpc.stock.quote.useQuery(
     { symbol: symbol ?? "" },
     { enabled: !!symbol, staleTime: 30_000 }
-  );
-
-  const { data: financials, isLoading: financialsLoading } = trpc.stock.financials.useQuery(
-    { symbol: symbol ?? "" },
-    { enabled: !!symbol && activeTab === "financials", staleTime: 300_000 }
-  );
-
-  // 줌 상태 관리
-  const { zoom, handleZoomChange, handlePan, handleDoubleTap, maxCandlesVisible } = useChartZoom(
-    chartData?.candles?.length ?? 0,
-    CHART_WIDTH
   );
 
   const indicators = useMemo(() => {
@@ -192,390 +174,398 @@ export default function ChartScreen() {
         </View>
       )}
 
-        {/* Tab Selection */}
-        <View style={[styles.tabRow, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity
-            onPress={() => setActiveTab("chart")}
-            style={[styles.tabButton, activeTab === "chart" && { borderBottomColor: colors.primary, borderBottomWidth: 3 }]}
-          >
-            <Text style={[styles.tabText, { color: activeTab === "chart" ? colors.primary : colors.muted }]}>
-              차트
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setActiveTab("analysis")}
-            style={[styles.tabButton, activeTab === "analysis" && { borderBottomColor: colors.primary, borderBottomWidth: 3 }]}
-          >
-            <Text style={[styles.tabText, { color: activeTab === "analysis" ? colors.primary : colors.muted }]}>
-              분석
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setActiveTab("financials")}
-            style={[styles.tabButton, activeTab === "financials" && { borderBottomColor: colors.primary, borderBottomWidth: 3 }]}
-          >
-            <Text style={[styles.tabText, { color: activeTab === "financials" ? colors.primary : colors.muted }]}>
-              재무
-            </Text>
-          </TouchableOpacity>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Period Tabs */}
+        <View style={[styles.periodRow, { backgroundColor: colors.surface }]}>
+          {PERIODS.map((p) => (
+            <TouchableOpacity
+              key={p}
+              onPress={() => setPeriod(p)}
+              style={[
+                styles.periodBtn,
+                period === p && { backgroundColor: colors.primary },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.periodText,
+                  { color: period === p ? "#fff" : colors.muted },
+                ]}
+              >
+                {p}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} scrollEnabled={scrollEnabled}>
-        {/* Chart Tab */}
-        {activeTab === "chart" && (
-          <>
-            {/* Period Tabs */}
-            <View style={[styles.periodRow, { backgroundColor: colors.surface }]}>
-              {PERIODS.map((p) => (
-                <TouchableOpacity
-                  key={p}
-                  onPress={() => setPeriod(p)}
-                  style={[
-                    styles.periodBtn,
-                    period === p && { backgroundColor: colors.primary },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.periodText,
-                      { color: period === p ? "#fff" : colors.muted },
-                    ]}
-                  >
-                    {p}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+        {/* Chart Area */}
+        <View style={[styles.chartContainer, { backgroundColor: colors.surface }]}>
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator color={colors.primary} size="large" />
+              <Text style={[styles.loadingText, { color: colors.muted }]}>
+                차트 데이터 로딩 중...
+              </Text>
             </View>
-
-            {/* Chart Area */}
-            <View style={[styles.chartContainer, { backgroundColor: colors.surface }]}>
-              {isLoading ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator color={colors.primary} size="large" />
-                  <Text style={[styles.loadingText, { color: colors.muted }]}>
-                    차트 데이터 로딩 중...
-                  </Text>
-                </View>
-              ) : error ? (
-                <View style={styles.loadingContainer}>
-                  <Text style={[styles.errorText, { color: colors.error }]}>
-                    데이터를 불러올 수 없습니다
-                  </Text>
-                  <Text style={[styles.errorSubText, { color: colors.muted }]}>
-                    {error.message}
-                  </Text>
-                </View>
-              ) : chartData && chartData.candles.length > 0 ? (
-                <>
-                  <CandlestickChart
-                    candles={chartData.candles}
-                    supportResistance={supportResistance}
-                    patterns={patterns}
-                    indicators={indicators ?? undefined}
-                    activeIndicators={activeIndicators}
-                    width={CHART_WIDTH}
-                    height={280}
-                    currency={chartData.currency}
-                    zoom={zoom}
-                    onPan={handlePan}
-                    onZoomChange={handleZoomChange}
-                    maxCandlesVisible={maxCandlesVisible}
-                  />
-                  <VolumeChart
-                    candles={chartData.candles}
-                    width={CHART_WIDTH}
-                    height={60}
-                    zoomOffset={zoom.offsetX}
-                    maxCandlesVisible={maxCandlesVisible}
-                  />
-                </>
-              ) : (
-                <View style={styles.loadingContainer}>
-                  <Text style={[styles.errorText, { color: colors.muted }]}>
-                    데이터 없음
-                  </Text>
-                </View>
-              )}
+          ) : error ? (
+            <View style={styles.loadingContainer}>
+              <Text style={[styles.errorText, { color: colors.error }]}>
+                데이터를 불러올 수 없습니다
+              </Text>
+              <Text style={[styles.errorSubText, { color: colors.muted }]}>
+                {error.message}
+              </Text>
             </View>
-
-            {/* Indicator Toggle */}
-            <View style={[styles.indicatorRow, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-              {(
-                [
-                  { key: "ma5" as const, label: "MA5", color: "#F59E0B" },
-                  { key: "ma20" as const, label: "MA20", color: "#3B82F6" },
-                  { key: "ma60" as const, label: "MA60", color: "#EC4899" },
-                  { key: "bb" as const, label: "BB", color: "#8B5CF6" },
-                ] as const
-              ).map((ind) => (
-                <TouchableOpacity
-                  key={ind.key}
-                  onPress={() => toggleIndicator(ind.key)}
-                  style={[
-                    styles.indicatorBtn,
-                    activeIndicators[ind.key] && { backgroundColor: ind.color + "33", borderColor: ind.color },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.indicatorText,
-                      { color: activeIndicators[ind.key] ? ind.color : colors.muted },
-                    ]}
-                  >
-                    {ind.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-
-              <View style={styles.subChartDivider} />
-
-              {(
-                [
-                  { key: "rsi" as const, label: "RSI" },
-                  { key: "macd" as const, label: "MACD" },
-                ] as const
-              ).map((chart) => (
-                <TouchableOpacity
-                  key={chart.key}
-                  onPress={() => setSubChart(subChart === chart.key ? "none" : chart.key)}
-                  style={[
-                    styles.indicatorBtn,
-                    subChart === chart.key && { backgroundColor: colors.primary + "33", borderColor: colors.primary },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.indicatorText,
-                      { color: subChart === chart.key ? colors.primary : colors.muted },
-                    ]}
-                  >
-                    {chart.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+          ) : chartData && chartData.candles.length > 0 ? (
+            <>
+              <CandlestickChart
+                candles={chartData.candles}
+                supportResistance={supportResistance}
+                patterns={patterns}
+                indicators={indicators ?? undefined}
+                activeIndicators={activeIndicators}
+                width={CHART_WIDTH}
+                height={280}
+                currency={chartData.currency}
+              />
+              <VolumeChart
+                candles={chartData.candles}
+                width={CHART_WIDTH}
+                height={60}
+              />
+            </>
+          ) : (
+            <View style={styles.loadingContainer}>
+              <Text style={[styles.errorText, { color: colors.muted }]}>
+                데이터 없음
+              </Text>
             </View>
+          )}
+        </View>
 
-            {/* Sub Chart */}
-            {subChart !== "none" && chartData && indicators && (
-              <View style={[styles.subChartContainer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-                {subChart === "rsi" && (
-                  <RSIChart
-                    rsiData={indicators.rsi}
-                    width={CHART_WIDTH}
-                    height={80}
-                    totalCandles={chartData.candles.length}
-                    zoomOffset={zoom.offsetX}
-                    maxCandlesVisible={maxCandlesVisible}
-                  />
-                )}
-                {subChart === "macd" && (
-                  <MACDChart
-                    macdData={indicators.macd}
-                    width={CHART_WIDTH}
-                    height={80}
-                    totalCandles={chartData.candles.length}
-                    zoomOffset={zoom.offsetX}
-                    maxCandlesVisible={maxCandlesVisible}
-                  />
-                )}
-              </View>
+        {/* Indicator Toggle */}
+        <View style={[styles.indicatorRow, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+          {(
+            [
+              { key: "ma5" as const, label: "MA5", color: "#F59E0B" },
+              { key: "ma20" as const, label: "MA20", color: "#3B82F6" },
+              { key: "ma60" as const, label: "MA60", color: "#EC4899" },
+              { key: "bb" as const, label: "BB", color: "#8B5CF6" },
+            ] as const
+          ).map((ind) => (
+            <TouchableOpacity
+              key={ind.key}
+              onPress={() => toggleIndicator(ind.key)}
+              style={[
+                styles.indicatorBtn,
+                activeIndicators[ind.key] && { backgroundColor: ind.color + "33", borderColor: ind.color },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.indicatorText,
+                  { color: activeIndicators[ind.key] ? ind.color : colors.muted },
+                ]}
+              >
+                {ind.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+
+          <View style={styles.subChartDivider} />
+
+          {(
+            [
+              { key: "rsi" as const, label: "RSI" },
+              { key: "macd" as const, label: "MACD" },
+            ] as const
+          ).map((sc) => (
+            <TouchableOpacity
+              key={sc.key}
+              onPress={() => setSubChart(subChart === sc.key ? "none" : sc.key)}
+              style={[
+                styles.indicatorBtn,
+                subChart === sc.key && { backgroundColor: colors.primary + "33", borderColor: colors.primary },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.indicatorText,
+                  { color: subChart === sc.key ? colors.primary : colors.muted },
+                ]}
+              >
+                {sc.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Sub Chart */}
+        {subChart !== "none" && chartData && indicators && (
+          <View style={[styles.subChartContainer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+            {subChart === "rsi" && (
+              <RSIChart
+                rsiData={indicators.rsi}
+                width={CHART_WIDTH}
+                height={90}
+                totalCandles={chartData.candles.length}
+              />
             )}
-
-            {/* Overall Signal Bubble */}
-            {overallSignal && (
-              <View style={[{ backgroundColor: colors.surface, borderTopColor: colors.border, borderTopWidth: 1, paddingHorizontal: 8, paddingVertical: 8 }]}>
-                <SignalBubble
-                  signal={overallSignal.signal}
-                  targetPrice={undefined}
-                  currentPrice={chartData?.regularMarketPrice}
-                  confidence={overallSignal.score}
-                />
-              </View>
+            {subChart === "macd" && (
+              <MACDChart
+                macdData={indicators.macd}
+                width={CHART_WIDTH}
+                height={90}
+                totalCandles={chartData.candles.length}
+              />
             )}
-
-            {/* Pattern Cards */}
-            {overallSignal && patterns.length > 0 && (
-              <View style={[styles.patternsContainer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-                <Text style={[styles.patternsTitle, { color: colors.foreground }]}>감지된 패턴</Text>
-                {patterns.slice(0, 3).map((pattern, i) => (
-                  <PatternCard key={i} pattern={pattern} />
-                ))}
-              </View>
-            )}
-          </>
-        )}
-
-        {/* Analysis Tab */}
-        {activeTab === "analysis" && chartData && indicators && (
-          <View style={{ height: 600 }}>
-            <AnalysisCommentsPanel
-              comments={generateAllComments(indicators, chartData.candles, supportResistance, patterns)}
-            />
           </View>
         )}
 
-        {/* Financials Tab */}
-        {activeTab === "financials" && (
-          <View style={{ height: 600 }}>
-            <FinancialsTab data={financials} isLoading={financialsLoading} currency={quote?.currency} />
+        {/* Support & Resistance Levels */}
+        {supportResistance.length > 0 && (
+          <View style={[styles.section, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              🎯 지지/저항 레벨
+            </Text>
+            {supportResistance.map((sr, i) => (
+              <View key={i} style={[styles.srRow, { borderBottomColor: colors.border }]}>
+                <View
+                  style={[
+                    styles.srTypeBadge,
+                    { backgroundColor: sr.type === "support" ? colors.support + "22" : colors.resistance + "22" },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.srTypeText,
+                      { color: sr.type === "support" ? colors.support : colors.resistance },
+                    ]}
+                  >
+                    {sr.type === "support" ? "지지" : "저항"}
+                  </Text>
+                </View>
+                <Text style={[styles.srPrice, { color: colors.foreground }]}>
+                  {chartData?.currency === "KRW"
+                    ? `₩${sr.price.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}`
+                    : `$${sr.price.toFixed(2)}`}
+                </Text>
+                <View style={styles.srStrength}>
+                  {Array.from({ length: 5 }, (_, j) => (
+                    <View
+                      key={j}
+                      style={[
+                        styles.srStrengthDot,
+                        {
+                          backgroundColor:
+                            j < sr.strength
+                              ? sr.type === "support"
+                                ? colors.support
+                                : colors.resistance
+                              : colors.border,
+                        },
+                      ]}
+                    />
+                  ))}
+                </View>
+                <Text style={[styles.srTouches, { color: colors.muted }]}>
+                  {sr.strength}회 접촉
+                </Text>
+              </View>
+            ))}
           </View>
         )}
+
+        {/* Detected Patterns */}
+        {patterns.length > 0 && (
+          <View style={[styles.section, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              📊 감지된 패턴
+            </Text>
+            {patterns.map((pattern, i) => (
+              <PatternCard key={i} pattern={pattern} currency={chartData?.currency ?? "KRW"} />
+            ))}
+          </View>
+        )}
+
+        {/* Overall Signal */}
+        {overallSignal && (
+          <View style={[styles.section, { backgroundColor: colors.surface }]}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+              📈 종합 분석
+            </Text>
+            <View
+              style={[
+                styles.signalCard,
+                {
+                  backgroundColor:
+                    overallSignal.signal === "buy"
+                      ? colors.bullish + "15"
+                      : overallSignal.signal === "sell"
+                      ? colors.bearish + "15"
+                      : colors.muted + "15",
+                  borderColor:
+                    overallSignal.signal === "buy"
+                      ? colors.bullish
+                      : overallSignal.signal === "sell"
+                      ? colors.bearish
+                      : colors.muted,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.signalTitle,
+                  {
+                    color:
+                      overallSignal.signal === "buy"
+                        ? colors.bullish
+                        : overallSignal.signal === "sell"
+                        ? colors.bearish
+                        : colors.muted,
+                  },
+                ]}
+              >
+                {overallSignal.signal === "buy"
+                  ? "🟢 매수 신호"
+                  : overallSignal.signal === "sell"
+                  ? "🔴 매도 신호"
+                  : "⚪ 중립"}
+              </Text>
+              <Text style={[styles.signalScore, { color: colors.muted }]}>
+                신호 강도: {Math.abs(overallSignal.score)}/5
+              </Text>
+              {overallSignal.reasons.map((reason, i) => (
+                <Text key={i} style={[styles.signalReason, { color: colors.foreground }]}>
+                  • {reason}
+                </Text>
+              ))}
+            </View>
+          </View>
+        )}
+
+        <View style={{ height: 32 }} />
       </ScrollView>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  tabRow: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 0.5,
   },
-  backBtn: {
-    paddingHorizontal: 8,
-  },
-  backText: {
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: "center",
-  },
-  symbolText: {
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  nameText: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  watchBtn: {
-    paddingHorizontal: 8,
-  },
+  backBtn: { paddingRight: 8, minWidth: 60 },
+  backText: { fontSize: 17, fontWeight: "400" },
+  headerCenter: { flex: 1, alignItems: "center" },
+  symbolText: { fontSize: 17, fontWeight: "700" },
+  nameText: { fontSize: 12, marginTop: 1, maxWidth: 160 },
+  watchBtn: { minWidth: 40, alignItems: "flex-end" },
   priceBar: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     gap: 8,
     flexWrap: "wrap",
   },
-  priceText: {
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  changeText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
+  priceText: { fontSize: 22, fontWeight: "700" },
+  changeText: { fontSize: 14, fontWeight: "500" },
   signalBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    paddingVertical: 3,
+    borderRadius: 12,
     marginLeft: "auto",
   },
-  signalText: {
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: "600",
-  },
+  signalText: { color: "#fff", fontSize: 11, fontWeight: "700" },
   periodRow: {
     flexDirection: "row",
     paddingHorizontal: 8,
     paddingVertical: 8,
-    gap: 6,
+    gap: 4,
   },
   periodBtn: {
     flex: 1,
     paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 4,
+    borderRadius: 8,
     alignItems: "center",
   },
-  periodText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
+  periodText: { fontSize: 12, fontWeight: "600" },
   chartContainer: {
-    marginHorizontal: 8,
-    marginVertical: 8,
-    borderRadius: 8,
-    overflow: "hidden",
+    marginTop: 2,
+    paddingTop: 8,
+    minHeight: 200,
   },
   loadingContainer: {
-    height: 300,
-    justifyContent: "center",
+    height: 200,
     alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-  },
-  errorText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  errorSubText: {
-    fontSize: 12,
-    marginTop: 4,
-  },
+  loadingText: { fontSize: 14 },
+  errorText: { fontSize: 15, fontWeight: "600" },
+  errorSubText: { fontSize: 12 },
   indicatorRow: {
     flexDirection: "row",
     paddingHorizontal: 8,
     paddingVertical: 8,
-    gap: 6,
-    borderTopWidth: 1,
+    gap: 4,
+    borderTopWidth: 0.5,
+    marginTop: 2,
     flexWrap: "wrap",
   },
   indicatorBtn: {
-    paddingVertical: 6,
     paddingHorizontal: 10,
-    borderRadius: 4,
+    paddingVertical: 5,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "transparent",
   },
-  indicatorText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  subChartDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: "#ccc",
-    opacity: 0.3,
-  },
+  indicatorText: { fontSize: 11, fontWeight: "600" },
+  subChartDivider: { width: 1, backgroundColor: "#30363D", marginHorizontal: 4 },
   subChartContainer: {
-    marginHorizontal: 8,
-    marginVertical: 8,
-    borderTopWidth: 1,
-    paddingVertical: 8,
+    borderTopWidth: 0.5,
+    paddingTop: 4,
   },
-  patternsContainer: {
-    marginTop: 12,
-    paddingHorizontal: 12,
+  section: {
+    marginTop: 8,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    borderTopWidth: 1,
   },
-  patternsTitle: {
-    fontSize: 14,
+  sectionTitle: {
+    fontSize: 15,
     fontWeight: "700",
-    marginBottom: 8,
+    marginBottom: 10,
   },
+  srRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 0.5,
+    gap: 8,
+  },
+  srTypeBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    minWidth: 40,
+    alignItems: "center",
+  },
+  srTypeText: { fontSize: 11, fontWeight: "700" },
+  srPrice: { flex: 1, fontSize: 14, fontWeight: "600" },
+  srStrength: { flexDirection: "row", gap: 3 },
+  srStrengthDot: { width: 6, height: 6, borderRadius: 3 },
+  srTouches: { fontSize: 11 },
+  signalCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    gap: 4,
+  },
+  signalTitle: { fontSize: 16, fontWeight: "700" },
+  signalScore: { fontSize: 12, marginBottom: 4 },
+  signalReason: { fontSize: 13 },
 });
