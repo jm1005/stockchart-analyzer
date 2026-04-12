@@ -381,60 +381,91 @@ export default function ChartScreen() {
               </View>
             )}
 
-            {/* ①번 지지/저항 레벨 */}
+            {/* 지지/저항 레벨 섹션 */}
             {supportResistance.length > 0 && (
-              <View style={[styles.srContainer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-                <Text style={[styles.srTitle, { color: colors.foreground }]}>① 지지/저항 레벨</Text>
-                {supportResistance.slice(0, 2).map((sr, i) => (
-                  <View key={i} style={[styles.srItem, { borderBottomColor: colors.border }]}>
-                    <View style={styles.srInfo}>
-                      <Text style={[styles.srLabel, { color: colors.muted }]}>
-                        {sr.type === "support" ? "지지" : "저항"} - {sr.strength.toFixed(0)}% 신뢰도
+              <View style={[styles.bottomSection, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>지지/저항 레벨</Text>
+                {supportResistance.slice(0, 3).map((sr, i) => (
+                  <View key={i} style={[styles.levelItem, { borderBottomColor: colors.border }]}>
+                    <View style={styles.levelLeft}>
+                      <Text style={[styles.levelType, { color: sr.type === "support" ? colors.success : colors.error }]}>
+                        {sr.type === "support" ? "지지" : "저항"}
                       </Text>
-                      <Text style={[styles.srPrice, { color: colors.foreground }]}>{sr.price.toFixed(0)}</Text>
+                      <Text style={[styles.levelPrice, { color: colors.foreground }]}>{sr.price.toFixed(0)}</Text>
                     </View>
-                    <View style={[styles.confidenceBar, { backgroundColor: colors.border }]}>
-                      <View
-                        style={[
-                          styles.confidenceFill,
-                          {
-                            width: `${sr.strength}%`,
-                            backgroundColor: sr.type === "support" ? colors.success : colors.error,
-                          },
-                        ]}
-                      />
+                    <View style={styles.levelRight}>
+                      <Text style={[styles.touchCount, { color: colors.muted }]}>터치: {sr.touches.length}회</Text>
+                      <View style={[styles.levelBar, { backgroundColor: colors.border }]}>
+                        <View
+                          style={[
+                            styles.levelBarFill,
+                            {
+                              width: `${sr.strength}%`,
+                              backgroundColor: sr.type === "support" ? colors.success : colors.error,
+                            },
+                          ]}
+                        />
+                      </View>
                     </View>
                   </View>
                 ))}
               </View>
             )}
 
-            {/* ②번 강약 패턴 */}
-            {patterns.length > 0 && (
-              <View style={[styles.patternContainer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
-                <Text style={[styles.patternTitle, { color: colors.foreground }]}>② 강약 패턴</Text>
-                {patterns.slice(0, 3).map((pattern, i) => (
-                  <View key={i} style={[styles.patternItem, { borderBottomColor: colors.border }]}>
-                    <View style={styles.patternInfo}>
-                      <Text style={[styles.patternName, { color: colors.foreground }]}>{pattern.type}</Text>
-                      <Text style={[styles.patternSignal, { color: pattern.signal === "bullish" ? colors.bullish : colors.bearish }]}>
-                        {pattern.signal === "bullish" ? "▲ 상승" : "▼ 하락"}
-                      </Text>
-                    </View>
-                    <View style={[styles.confidenceBar, { backgroundColor: colors.border }]}>
-                      <View
-                        style={[
-                          styles.confidenceFill,
-                          {
-                            width: `${pattern.confidence * 100}%`,
-                            backgroundColor: pattern.signal === "bullish" ? colors.bullish : colors.bearish,
-                          },
-                        ]}
-                      />
-                    </View>
-                    <Text style={[styles.confidenceText, { color: colors.muted }]}>{(pattern.confidence * 100).toFixed(0)}%</Text>
-                  </View>
-                ))}
+            {/* 종합 분석 섹션 */}
+            {indicators && chartData && (
+              <View style={[styles.bottomSection, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>종합 분석</Text>
+                {(() => {
+                  const comments = generateAllComments(indicators, chartData.candles, supportResistance, patterns);
+                  const topComments = comments.slice(0, 3);
+                  return topComments.length > 0 ? (
+                    topComments.map((comment, i) => (
+                      <View key={i} style={[styles.analysisItem, { borderBottomColor: colors.border }]}>
+                        <View style={styles.analysisHeader}>
+                          <Text style={[styles.analysisTitle, { color: colors.foreground }]}>{comment.title}</Text>
+                          <View
+                            style={[
+                              styles.signalBadgeSmall,
+                              {
+                                backgroundColor:
+                                  comment.signal === "bullish"
+                                    ? colors.bullish + "33"
+                                    : comment.signal === "bearish"
+                                    ? colors.bearish + "33"
+                                    : colors.muted + "33",
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.signalTextSmall,
+                                {
+                                  color:
+                                    comment.signal === "bullish"
+                                      ? colors.bullish
+                                      : comment.signal === "bearish"
+                                      ? colors.bearish
+                                      : colors.muted,
+                                },
+                              ]}
+                            >
+                              {comment.signal === "bullish" ? "매수" : comment.signal === "bearish" ? "매도" : "중립"}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.analysisDesc, { color: colors.muted }]} numberOfLines={2}>
+                          {comment.description}
+                        </Text>
+                        <Text style={[styles.confidencePercent, { color: colors.muted }]}>
+                          신뢰도: {(comment.confidence * 100).toFixed(0)}%
+                        </Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={[styles.noData, { color: colors.muted }]}>분석 데이터 없음</Text>
+                  );
+                })()}
               </View>
             )}
 
@@ -692,5 +723,93 @@ const styles = StyleSheet.create({
   patternSignal: {
     fontSize: 12,
     fontWeight: "600",
+  },
+  bottomSection: {
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 12,
+  },
+  levelItem: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "center" as const,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+  },
+  levelLeft: {
+    flex: 0.4,
+  },
+  levelType: {
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  levelPrice: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  levelRight: {
+    flex: 0.6,
+    alignItems: "flex-end" as const,
+  },
+  touchCount: {
+    fontSize: 11,
+    marginBottom: 4,
+  },
+  levelBar: {
+    height: 6,
+    borderRadius: 3,
+    overflow: "hidden" as const,
+    width: "100%",
+  },
+  levelBarFill: {
+    height: "100%" as const,
+    borderRadius: 3,
+  },
+  analysisItem: {
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+  },
+  analysisHeader: {
+    flexDirection: "row" as const,
+    justifyContent: "space-between" as const,
+    alignItems: "center" as const,
+    marginBottom: 6,
+  },
+  analysisTitle: {
+    fontSize: 12,
+    fontWeight: "600",
+    flex: 1,
+  },
+  signalBadgeSmall: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 3,
+    marginLeft: 8,
+  },
+  signalTextSmall: {
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  analysisDesc: {
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 4,
+  },
+  confidencePercent: {
+    fontSize: 10,
+  },
+  noData: {
+    fontSize: 12,
+    textAlign: "center" as const,
+    paddingVertical: 12,
   },
 });
