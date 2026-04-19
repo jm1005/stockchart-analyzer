@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
-import { CandlestickChartWithZoom as CandlestickChart } from "@/components/chart/CandlestickChartWithZoom";
+import { CandlestickChartWithPinch as CandlestickChart } from "@/components/chart/CandlestickChartWithPinch";
 import { VolumeChart } from "@/components/chart/VolumeChart";
 import { RSIChart } from "@/components/chart/RSIChart";
 import { MACDChart } from "@/components/chart/MACDChart";
