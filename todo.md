@@ -137,3 +137,11 @@
 - [x] 지표 색상 설정 (MA5: 주황, MA20: 파란, MA60: 분홍, BB: 보라)
 - [x] 줌/스크롤 시 지표 동적 스케일
 - [x] 지표 동기화 테스트 (기존 86개 테스트 모두 통과)
+
+## Phase 18: RSI/MACD 차트 동기화
+- [x] RSI 차트 동기화 버전 구현 (RSIChartSynced.tsx)
+- [x] MACD 차트 동기화 버전 구현 (MACDChartSynced.tsx)
+- [x] 세 차트 공유 줌/스크롤 상태 관리
+- [x] 차트 페이지에서 공유 상태 제공 (onZoomChange, onScrollChange)
+- [x] 제스처 이벤트 전파 및 동기화
+- [x] 동기화 테스트 (기존 86개 테스트 모두 통과)

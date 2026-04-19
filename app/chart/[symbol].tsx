@@ -13,8 +13,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { CandlestickChartGesture } from "@/components/chart/CandlestickChartGesture";
 import { VolumeChartSynced } from "@/components/chart/VolumeChartSynced";
-import { RSIChart } from "@/components/chart/RSIChart";
-import { MACDChart } from "@/components/chart/MACDChart";
+import { RSIChartSynced } from "@/components/chart/RSIChartSynced";
+import { MACDChartSynced } from "@/components/chart/MACDChartSynced";
 import { PatternCard } from "@/components/chart/PatternCard";
 import { useColors } from "@/hooks/use-colors";
 import { useWatchlist } from "@/hooks/useWatchlist";
@@ -49,7 +49,8 @@ export default function ChartScreen() {
     ma60: false,
     bb: false,
   });
-  // 줌 상태 제거 - CandlestickChartGesture에서 내부 관리
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [scrollOffset, setScrollOffset] = useState(0);
 
   const { data: chartData, isLoading, error } = trpc.stock.chart.useQuery(
     { symbol: symbol ?? "", period },
@@ -234,6 +235,8 @@ export default function ChartScreen() {
                 height={280}
                 currency={chartData.currency}
                 earnings={earnings}
+                onZoomChange={setZoomLevel}
+                onScrollChange={setScrollOffset}
               />
               {/* 줌 컨트롤 제거 - 제스처 기반 상호작용으로 대체 */}
 
@@ -347,19 +350,23 @@ export default function ChartScreen() {
         {subChart !== "none" && chartData && indicators && (
           <View style={[styles.subChartContainer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
             {subChart === "rsi" && (
-              <RSIChart
+              <RSIChartSynced
                 rsiData={indicators.rsi}
                 width={CHART_WIDTH}
                 height={90}
                 totalCandles={chartData.candles.length}
+                zoomLevel={zoomLevel}
+                scrollOffset={scrollOffset}
               />
             )}
             {subChart === "macd" && (
-              <MACDChart
+              <MACDChartSynced
                 macdData={indicators.macd}
                 width={CHART_WIDTH}
-                height={90}
+                height={100}
                 totalCandles={chartData.candles.length}
+                zoomLevel={zoomLevel}
+                scrollOffset={scrollOffset}
               />
             )}
           </View>

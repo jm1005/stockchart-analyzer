@@ -37,6 +37,8 @@ interface CandlestickChartGestureProps {
     surpriseType: "beat" | "miss" | "neutral";
     revenue?: { expected?: number; actual?: number };
   }>;
+  onZoomChange?: (zoom: number) => void;
+  onScrollChange?: (offset: number) => void;
 }
 
 const PADDING = { left: 40, right: 16, top: 16, bottom: 40 };
@@ -53,6 +55,8 @@ export function CandlestickChartGesture({
   height = 300,
   currency = "KRW",
   earnings = [],
+  onZoomChange,
+  onScrollChange,
 }: CandlestickChartGestureProps) {
   const colors = useColors();
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -131,7 +135,8 @@ export function CandlestickChartGesture({
 
   const handlePinchEnd = useCallback(() => {
     scale.value = withSpring(Math.round(scale.value * 2) / 2);
-  }, []);
+    onZoomChange?.(scale.value);
+  }, [onZoomChange]);
 
   // 팬 제스처 핸들러
   const handlePanGesture = useCallback((event: any) => {
@@ -160,7 +165,9 @@ export function CandlestickChartGesture({
   const handleDoubleTap = useCallback(() => {
     scale.value = withSpring(1);
     offsetX.value = withSpring(0);
-  }, []);
+    onZoomChange?.(1);
+    onScrollChange?.(0);
+  }, [onZoomChange, onScrollChange]);
 
   // 차트 렌더링
   const chartContent = (
