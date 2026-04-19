@@ -129,3 +129,11 @@
 - [x] 좋우 바운더리 리바운드 효과
 - [x] CandlestickChartGesture 새 로직 구현 및 차트 페이지 연동
 - [x] 기존 86개 테스트 모두 통과
+
+## Phase 17: 보조지표 줌/스크롤 동기화
+- [x] CandlestickChartGesture에 MA5, MA20, MA60 렌더링
+- [x] 볼린저 밴드 렌더링 (상단, 중간, 하단)
+- [x] 지표 토글 기능 (activeIndicators 연동)
+- [x] 지표 색상 설정 (MA5: 주황, MA20: 파란, MA60: 분홍, BB: 보라)
+- [x] 줌/스크롤 시 지표 동적 스케일
+- [x] 지표 동기화 테스트 (기존 86개 테스트 모두 통과)

@@ -236,8 +236,39 @@ export function CandlestickChartGesture({
             </G>
           );
         })}
+        {/* MA5 */}
+        {activeIndicators.ma5 && indicators?.ma5 && (
+          <G>
+            {indicators.ma5.map((ma, idx) => {
+              if (idx < startIndex || idx >= endIndex) return null;
+              if (ma === null) return null;
+              const nextIdx = idx + 1;
+              if (nextIdx >= indicators.ma5.length) return null;
+              const nextMa = indicators.ma5[nextIdx];
+              if (nextMa === null) return null;
 
-        {/* 이동평균선 */}
+              const x1 = toX(idx);
+              const y1 = toY(ma);
+              const x2 = toX(nextIdx);
+              const y2 = toY(nextMa);
+
+              return (
+                <Line
+                  key={`ma5-${idx}`}
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke="#F59E0B"
+                  strokeWidth={1.5}
+                  opacity={0.7}
+                />
+              );
+            })}
+          </G>
+        )}
+
+        {/* MA20 */}
         {activeIndicators.ma20 && indicators?.ma20 && (
           <G>
             {indicators.ma20.map((ma, idx) => {
@@ -260,10 +291,100 @@ export function CandlestickChartGesture({
                   y1={y1}
                   x2={x2}
                   y2={y2}
-                  stroke={colors.warning}
+                  stroke="#3B82F6"
                   strokeWidth={1.5}
                   opacity={0.7}
                 />
+              );
+            })}
+          </G>
+        )}
+
+        {/* MA60 */}
+        {activeIndicators.ma60 && indicators?.ma60 && (
+          <G>
+            {indicators.ma60.map((ma, idx) => {
+              if (idx < startIndex || idx >= endIndex) return null;
+              if (ma === null) return null;
+              const nextIdx = idx + 1;
+              if (nextIdx >= indicators.ma60.length) return null;
+              const nextMa = indicators.ma60[nextIdx];
+              if (nextMa === null) return null;
+
+              const x1 = toX(idx);
+              const y1 = toY(ma);
+              const x2 = toX(nextIdx);
+              const y2 = toY(nextMa);
+
+              return (
+                <Line
+                  key={`ma60-${idx}`}
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke="#EC4899"
+                  strokeWidth={1.5}
+                  opacity={0.7}
+                />
+              );
+            })}
+          </G>
+        )}
+
+        {/* 볼린저 밴드 */}
+        {activeIndicators.bb && indicators?.bollingerBands && (
+          <G>
+            {indicators.bollingerBands.upper.map((upper: number | null, idx: number) => {
+              if (idx < startIndex || idx >= endIndex) return null;
+              if (upper === null || indicators.bollingerBands.middle[idx] === null || indicators.bollingerBands.lower[idx] === null) return null;
+              const nextIdx = idx + 1;
+              if (nextIdx >= indicators.bollingerBands.upper.length) return null;
+              const nextUpper = indicators.bollingerBands.upper[nextIdx];
+              const nextMiddle = indicators.bollingerBands.middle[nextIdx];
+              const nextLower = indicators.bollingerBands.lower[nextIdx];
+              if (nextUpper === null || nextMiddle === null || nextLower === null) return null;
+
+              const x1 = toX(idx);
+              const x2 = toX(nextIdx);
+              const middle = indicators.bollingerBands.middle[idx];
+              const lower = indicators.bollingerBands.lower[idx];
+
+              return (
+                <G key={`bb-${idx}`}>
+                  {/* 상단 밴드 */}
+                  <Line
+                    x1={x1}
+                    y1={toY(upper)}
+                    x2={x2}
+                    y2={toY(nextUpper)}
+                    stroke="#8B5CF6"
+                    strokeWidth={1}
+                    opacity={0.5}
+                    strokeDasharray="3,3"
+                  />
+                  {/* 중앙 밴드 */}
+                  <Line
+                    x1={x1}
+                    y1={toY(middle!)}
+                    x2={x2}
+                    y2={toY(nextMiddle)}
+                    stroke="#8B5CF6"
+                    strokeWidth={1.5}
+                    opacity={0.7}
+                  />
+                  {/* 하단 밴드 */}
+                  <Line
+                    x1={x1}
+                    y1={toY(lower!)}
+                    x2={x2}
+                    y2={toY(nextLower)}
+                    stroke="#8B5CF6"
+                    strokeWidth={1}
+                    opacity={0.5}
+                    strokeDasharray="3,3"
+                  />
+                </G>
               );
             })}
           </G>
