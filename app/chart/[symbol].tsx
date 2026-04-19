@@ -11,8 +11,8 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
-import { CandlestickChartWithDrag as CandlestickChart } from "@/components/chart/CandlestickChartWithDrag";
-import { VolumeChart } from "@/components/chart/VolumeChart";
+import { CandlestickChartSynced } from "@/components/chart/CandlestickChartSynced";
+import { VolumeChartSynced } from "@/components/chart/VolumeChartSynced";
 import { RSIChart } from "@/components/chart/RSIChart";
 import { MACDChart } from "@/components/chart/MACDChart";
 import { PatternCard } from "@/components/chart/PatternCard";
@@ -49,6 +49,8 @@ export default function ChartScreen() {
     ma60: false,
     bb: false,
   });
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [scrollOffset, setScrollOffset] = useState(0);
 
   const { data: chartData, isLoading, error } = trpc.stock.chart.useQuery(
     { symbol: symbol ?? "", period },
@@ -218,7 +220,7 @@ export default function ChartScreen() {
             </View>
           ) : chartData && chartData.candles.length > 0 ? (
             <>
-              <CandlestickChart
+              <CandlestickChartSynced
                 candles={chartData.candles}
                 supportResistance={supportResistance}
                 patterns={patterns}
@@ -227,12 +229,82 @@ export default function ChartScreen() {
                 width={CHART_WIDTH}
                 height={280}
                 currency={chartData.currency}
+                zoomLevel={zoomLevel}
+                scrollOffset={scrollOffset}
+                onZoomChange={setZoomLevel}
+                onScrollChange={setScrollOffset}
+                onDoubleTap={() => {
+                  setZoomLevel(1);
+                  setScrollOffset(0);
+                }}
               />
-              <VolumeChart
+              <View style={[styles.zoomControlsContainer, { backgroundColor: colors.surface }]}>
+                <TouchableOpacity
+                  style={[styles.zoomButton, { borderColor: colors.border }]}
+                  onPress={() => setZoomLevel((prev) => Math.max(1, prev - 0.5))}
+                >
+                  <Text style={[styles.zoomButtonText, { color: colors.foreground }]}>−</Text>
+                </TouchableOpacity>
+                <Text style={[styles.zoomLevel, { color: colors.muted }]}>{zoomLevel.toFixed(1)}x</Text>
+                <TouchableOpacity
+                  style={[styles.zoomButton, { borderColor: colors.border }]}
+                  onPress={() => setZoomLevel((prev) => Math.min(5, prev + 0.5))}
+                >
+                  <Text style={[styles.zoomButtonText, { color: colors.foreground }]}>+</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.resetButton, { backgroundColor: colors.primary }]}
+                  onPress={() => {
+                    setZoomLevel(1);
+                    setScrollOffset(0);
+                  }}
+                >
+                  <Text style={[styles.resetButtonText, { color: colors.background }]}>리셋</Text>
+                </TouchableOpacity>
+                {Platform.OS !== "web" && (
+                  <Text style={[styles.gestureHint, { color: colors.muted }]}>
+                    💡 핀치/드래그
+                  </Text>
+                )}
+              </View>
+              <VolumeChartSynced
                 candles={chartData.candles}
                 width={CHART_WIDTH}
                 height={60}
+                zoomLevel={zoomLevel}
+                scrollOffset={scrollOffset}
+                visibleCandleCount={Math.max(10, Math.floor(60 / zoomLevel))}
               />
+              {zoomLevel > 1 && (
+                <View style={[styles.scrollControls, { backgroundColor: colors.surface }]}>
+                  <TouchableOpacity
+                    style={[styles.scrollButton, { borderColor: colors.border }]}
+                    onPress={() => setScrollOffset((prev) => Math.max(0, prev - 5))}
+                  >
+                    <Text style={[styles.scrollButtonText, { color: colors.foreground }]}>◀</Text>
+                  </TouchableOpacity>
+                  <View style={[styles.scrollIndicator, { backgroundColor: colors.border }]}>
+                    <View
+                      style={[
+                        styles.scrollIndicatorFill,
+                        {
+                          backgroundColor: colors.primary,
+                          width: `${((scrollOffset + Math.max(10, Math.floor(60 / zoomLevel)) / 2) / chartData.candles.length) * 100}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.scrollButton, { borderColor: colors.border }]}
+                    onPress={() => {
+                      const maxOffset = Math.max(0, chartData.candles.length - Math.max(10, Math.floor(60 / zoomLevel)));
+                      setScrollOffset((prev) => Math.min(maxOffset, prev + 5));
+                    }}
+                  >
+                    <Text style={[styles.scrollButtonText, { color: colors.foreground }]}>▶</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </>
           ) : (
             <View style={styles.loadingContainer}>
@@ -568,4 +640,78 @@ const styles = StyleSheet.create({
   signalTitle: { fontSize: 16, fontWeight: "700" },
   signalScore: { fontSize: 12, marginBottom: 4 },
   signalReason: { fontSize: 13 },
+  zoomControlsContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+    flexWrap: "wrap",
+  },
+  zoomButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    borderWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  zoomButtonText: {
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  zoomLevel: {
+    fontSize: 12,
+    fontWeight: "600",
+    minWidth: 40,
+    textAlign: "center",
+  },
+  resetButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  resetButtonText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  gestureHint: {
+    fontSize: 10,
+    fontStyle: "italic",
+  },
+  scrollControls: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#e5e7eb",
+  },
+  scrollButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    borderWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  scrollButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  scrollIndicator: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  scrollIndicatorFill: {
+    height: "100%",
+    borderRadius: 2,
+  },
 });
