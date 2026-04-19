@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
-import { CandlestickChartSynced } from "@/components/chart/CandlestickChartSynced";
+import { CandlestickChartGesture } from "@/components/chart/CandlestickChartGesture";
 import { VolumeChartSynced } from "@/components/chart/VolumeChartSynced";
 import { RSIChart } from "@/components/chart/RSIChart";
 import { MACDChart } from "@/components/chart/MACDChart";
@@ -49,8 +49,7 @@ export default function ChartScreen() {
     ma60: false,
     bb: false,
   });
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [scrollOffset, setScrollOffset] = useState(0);
+  // 줌 상태 제거 - CandlestickChartGesture에서 내부 관리
 
   const { data: chartData, isLoading, error } = trpc.stock.chart.useQuery(
     { symbol: symbol ?? "", period },
@@ -225,7 +224,7 @@ export default function ChartScreen() {
             </View>
           ) : chartData && chartData.candles.length > 0 ? (
             <>
-              <CandlestickChartSynced
+              <CandlestickChartGesture
                 candles={chartData.candles}
                 supportResistance={supportResistance}
                 patterns={patterns}
@@ -234,46 +233,11 @@ export default function ChartScreen() {
                 width={CHART_WIDTH}
                 height={280}
                 currency={chartData.currency}
-                zoomLevel={zoomLevel}
-                scrollOffset={scrollOffset}
-                onZoomChange={setZoomLevel}
-                onScrollChange={setScrollOffset}
-                onDoubleTap={() => {
-                  setZoomLevel(1);
-                  setScrollOffset(0);
-                }}
                 earnings={earnings}
               />
-              <View style={[styles.zoomControlsContainer, { backgroundColor: colors.surface }]}>
-                <TouchableOpacity
-                  style={[styles.zoomButton, { borderColor: colors.border }]}
-                  onPress={() => setZoomLevel((prev) => Math.max(1, prev - 0.5))}
-                >
-                  <Text style={[styles.zoomButtonText, { color: colors.foreground }]}>−</Text>
-                </TouchableOpacity>
-                <Text style={[styles.zoomLevel, { color: colors.muted }]}>{zoomLevel.toFixed(1)}x</Text>
-                <TouchableOpacity
-                  style={[styles.zoomButton, { borderColor: colors.border }]}
-                  onPress={() => setZoomLevel((prev) => Math.min(5, prev + 0.5))}
-                >
-                  <Text style={[styles.zoomButtonText, { color: colors.foreground }]}>+</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.resetButton, { backgroundColor: colors.primary }]}
-                  onPress={() => {
-                    setZoomLevel(1);
-                    setScrollOffset(0);
-                  }}
-                >
-                  <Text style={[styles.resetButtonText, { color: colors.background }]}>리셋</Text>
-                </TouchableOpacity>
-                {Platform.OS !== "web" && (
-                  <Text style={[styles.gestureHint, { color: colors.muted }]}>
-                    💡 핀치/드래그
-                  </Text>
-                )}
-              </View>
-              <VolumeChartSynced
+              {/* 줌 컨트롤 제거 - 제스처 기반 상호작용으로 대체 */}
+
+              {/* <VolumeChartSynced
                 candles={chartData.candles}
                 width={CHART_WIDTH}
                 height={60}
@@ -311,6 +275,7 @@ export default function ChartScreen() {
                   </TouchableOpacity>
                 </View>
               )}
+              */}
             </>
           ) : (
             <View style={styles.loadingContainer}>
