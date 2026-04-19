@@ -100,3 +100,20 @@ export interface WatchlistItem {
   name: string;
   addedAt: number;
 }
+
+export interface EarningsEvent {
+  date: number; // timestamp
+  symbol: string;
+  expectedEPS?: number;
+  actualEPS?: number;
+  surprise?: number; // percentage
+  surpriseType: "beat" | "miss" | "neutral"; // beat = 초록색, miss = 빨간색
+  revenue?: {
+    expected?: number;
+    actual?: number;
+  };
+}
+
+export interface ChartDataWithEarnings extends ChartData {
+  earnings?: EarningsEvent[];
+}

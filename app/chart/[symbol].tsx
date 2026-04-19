@@ -62,6 +62,11 @@ export default function ChartScreen() {
     { enabled: !!symbol, staleTime: 30_000 }
   );
 
+  const { data: earnings = [] } = trpc.stock.earnings.useQuery(
+    { symbol: symbol ?? "" },
+    { enabled: !!symbol, staleTime: 3600_000 }
+  );
+
   const indicators = useMemo(() => {
     if (!chartData?.candles || chartData.candles.length < 20) return null;
     return calculateAllIndicators(chartData.candles);
@@ -237,6 +242,7 @@ export default function ChartScreen() {
                   setZoomLevel(1);
                   setScrollOffset(0);
                 }}
+                earnings={earnings}
               />
               <View style={[styles.zoomControlsContainer, { backgroundColor: colors.surface }]}>
                 <TouchableOpacity

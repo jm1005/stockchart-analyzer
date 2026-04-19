@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Platform } from "react-native";
-import Svg, { Rect, Line, G, Path, Text as SvgText } from "react-native-svg";
+import Svg, { Rect, Line, G, Path, Text as SvgText, Circle } from "react-native-svg";
 import { useColors } from "@/hooks/use-colors";
 import type { Candle, SupportResistanceLevel, PatternResult, TechnicalIndicators } from "@/shared/stockTypes";
 import { useCallback, useMemo, useState, useRef } from "react";
@@ -28,6 +28,17 @@ interface CandlestickChartSyncedProps {
   onZoomChange: (zoom: number) => void;
   onScrollChange: (offset: number) => void;
   onDoubleTap?: () => void;
+  // 어닝 마커
+  earnings?: Array<{
+    date: number;
+    symbol: string;
+    expectedEPS?: number;
+    actualEPS?: number;
+    surprise?: number;
+    surpriseType: "beat" | "miss" | "neutral";
+    revenue?: { expected?: number; actual?: number };
+  }>;
+  onEarningsMarkerPress?: (event: any) => void;
 }
 
 export function CandlestickChartSynced({
@@ -44,6 +55,8 @@ export function CandlestickChartSynced({
   onZoomChange,
   onScrollChange,
   onDoubleTap,
+  earnings = [],
+  onEarningsMarkerPress,
 }: CandlestickChartSyncedProps) {
   const colors = useColors();
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -405,6 +418,66 @@ export function CandlestickChartSynced({
             </G>
           );
         })()}
+
+        {/* 어닝 마커 렌더링 */}
+        {earnings.length > 0 && (
+          <G>
+            {earnings.map((event, idx) => {
+              // 어닝 날짜와 가장 가까운 캔들 인덱스 찾기
+              let closestIdx = -1;
+              let minDiff = Infinity;
+              for (let i = 0; i < candles.length; i++) {
+                const diff = Math.abs(candles[i].timestamp - event.date);
+                if (diff < minDiff) {
+                  minDiff = diff;
+                  closestIdx = i;
+                }
+              }
+              if (closestIdx < 0) return null;
+
+              const x = toX(closestIdx);
+              const markerColor =
+                event.surpriseType === "beat"
+                  ? colors.bullish || "#22C55E"
+                  : event.surpriseType === "miss"
+                  ? colors.bearish || "#EF4444"
+                  : colors.muted || "#6B7280";
+              const markerRadius = 6;
+
+              return (
+                <G key={`earnings-${idx}`}>
+                  {/* 배경 원 */}
+                  <Circle
+                    cx={x}
+                    cy={height - PADDING.bottom + 20}
+                    r={markerRadius + 2}
+                    fill={markerColor}
+                    opacity={0.2}
+                  />
+                  {/* 마커 원 */}
+                  <Circle
+                    cx={x}
+                    cy={height - PADDING.bottom + 20}
+                    r={markerRadius}
+                    fill={markerColor}
+                    opacity={0.9}
+                  />
+                  {/* E 텍스트 */}
+                  <SvgText
+                    x={x}
+                    y={height - PADDING.bottom + 24}
+                    fontSize={10}
+                    fontWeight="700"
+                    fill="white"
+                    textAnchor="middle"
+                  >
+                    E
+                  </SvgText>
+                </G>
+              );
+            })}
+          </G>
+        )}
       </Svg>
     </View>
   );

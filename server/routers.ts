@@ -144,6 +144,44 @@ export const appRouter = router({
         };
       }),
 
+    // Get earnings data for a symbol
+    earnings: publicProcedure
+      .input(z.object({ symbol: z.string() }))
+      .query(async ({ input }) => {
+        // Mock earnings data - in production, fetch from financial API
+        // Example: Alpha Vantage, IEX Cloud, or Finnhub
+        const mockEarnings = [
+          {
+            date: new Date("2024-01-15").getTime(),
+            symbol: input.symbol,
+            expectedEPS: 1.5,
+            actualEPS: 1.65,
+            surprise: 10,
+            surpriseType: "beat" as const,
+            revenue: { expected: 50000, actual: 52000 },
+          },
+          {
+            date: new Date("2024-04-15").getTime(),
+            symbol: input.symbol,
+            expectedEPS: 1.8,
+            actualEPS: 1.72,
+            surprise: -4,
+            surpriseType: "miss" as const,
+            revenue: { expected: 55000, actual: 53000 },
+          },
+          {
+            date: new Date("2024-07-15").getTime(),
+            symbol: input.symbol,
+            expectedEPS: 2.0,
+            actualEPS: 2.0,
+            surprise: 0,
+            surpriseType: "neutral" as const,
+            revenue: { expected: 60000, actual: 60000 },
+          },
+        ];
+        return mockEarnings;
+      }),
+
     // Get multiple quotes at once (for watchlist)
     quotes: publicProcedure
       .input(z.object({ symbols: z.array(z.string()).max(20) }))
