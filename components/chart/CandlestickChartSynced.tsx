@@ -247,6 +247,98 @@ export function CandlestickChartSynced({
           );
         })}
 
+        {/* Moving Average Lines */}
+        {activeIndicators.ma5 && indicators?.ma5 && (
+          <G>
+            {indicators.ma5.map((ma, idx) => {
+              if (idx < startIndex || idx >= startIndex + visibleCandleCount) return null;
+              if (ma === null) return null;
+              const nextIdx = idx + 1;
+              if (nextIdx >= indicators.ma5.length) return null;
+              const nextMa = indicators.ma5[nextIdx];
+              if (nextMa === null) return null;
+              
+              const x1 = toX(idx);
+              const y1 = toY(ma);
+              const x2 = toX(nextIdx);
+              const y2 = toY(nextMa);
+              
+              return (
+                <Line
+                  key={`ma5-${idx}`}
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke={colors.primary}
+                  strokeWidth={1.5}
+                  opacity={0.7}
+                />
+              );
+            })}
+          </G>
+        )}
+        {activeIndicators.ma20 && indicators?.ma20 && (
+          <G>
+            {indicators.ma20.map((ma, idx) => {
+              if (idx < startIndex || idx >= startIndex + visibleCandleCount) return null;
+              if (ma === null) return null;
+              const nextIdx = idx + 1;
+              if (nextIdx >= indicators.ma20.length) return null;
+              const nextMa = indicators.ma20[nextIdx];
+              if (nextMa === null) return null;
+              
+              const x1 = toX(idx);
+              const y1 = toY(ma);
+              const x2 = toX(nextIdx);
+              const y2 = toY(nextMa);
+              
+              return (
+                <Line
+                  key={`ma20-${idx}`}
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke={colors.warning}
+                  strokeWidth={1.5}
+                  opacity={0.7}
+                />
+              );
+            })}
+          </G>
+        )}
+        {activeIndicators.ma60 && indicators?.ma60 && (
+          <G>
+            {indicators.ma60.map((ma, idx) => {
+              if (idx < startIndex || idx >= startIndex + visibleCandleCount) return null;
+              if (ma === null) return null;
+              const nextIdx = idx + 1;
+              if (nextIdx >= indicators.ma60.length) return null;
+              const nextMa = indicators.ma60[nextIdx];
+              if (nextMa === null) return null;
+              
+              const x1 = toX(idx);
+              const y1 = toY(ma);
+              const x2 = toX(nextIdx);
+              const y2 = toY(nextMa);
+              
+              return (
+                <Line
+                  key={`ma60-${idx}`}
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke={colors.error}
+                  strokeWidth={1.5}
+                  opacity={0.7}
+                />
+              );
+            })}
+          </G>
+        )}
+
         {/* Candlesticks */}
         {visibleCandles.map((candle, visIdx) => {
           const i = startIndex + visIdx;
