@@ -97,3 +97,16 @@
 - [x] 관성 스크롤 및 바운더리 처리
 - [x] 차트 페이지 통합 (CandlestickChartOptimized 적용)
 - [x] 47개 테스트 모두 통과
+
+
+#### Phase 20: 디자인 토늨매너 유지 + 구조 개선 (레이아웃 유연화, 제스처 레이어, 성능 최적화)
+- [x] 레이아웃 유연화: 동적 캠들 롍이 계산 (화면 롍이 / 표시 개수)
+- [x] 캠들 결쳐지는 간격 방지 (UI 레벨)
+- [x] 제스처 레이어 분리: PinchGestureHandler/PanGestureHandler 전체 덤및
+- [x] 다른 버튼과 터치 간섬 방지
+- [x] 어닝 아이콘 최적화: 얖은 Event Lane 공간 확보 (20px)
+- [x] Floating Tooltip 테마 일치 (다크/라이트 모드)
+- [x] Reanimated Shared Value 적용
+- [x] Memoization으로 UI 리렌더링 범위 제한 (ChartSvgRenderer, EventLaneRenderer)
+- [x] 60fps 성능 유지 검증
+- [x] 전체 통합 테스트 (47개 테스트 모두 통과)
