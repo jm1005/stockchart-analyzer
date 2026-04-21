@@ -39,11 +39,12 @@ interface CandlestickChartRefinedProps {
   }>;
 }
 
-const PADDING = { top: 20, right: 60, bottom: 50, left: 40 };
-const EVENT_LANE_HEIGHT = 20; // 어닝 아이콘용 얇은 공간
+const PADDING = { top: 16, right: 60, bottom: 20, left: 40 };
+const EVENT_LANE_HEIGHT = 16; // 어닝 아이콘용 얇은 공간
 const MIN_VISIBLE_CANDLES = 10;
 const MAX_VISIBLE_CANDLES = 200;
 const BASE_VISIBLE_CANDLES = 60;
+const Y_AXIS_MARGIN = 0.02; // 2% 상하 마진 (데이터 80-90% 활용)
 
 // ============ 차트 렌더링 로직 (Memoized) ============
 interface ChartRenderProps {
@@ -463,7 +464,7 @@ export function CandlestickChartRefined({
     return candles.slice(startIndex, endIndex);
   }, [candles, startIndex, endIndex]);
 
-  // ============ Y축 범위 자동 계산 ============
+  // ============ Y축 범위 자동 계산 (최소 마진) ============
   const { minPrice, maxPrice, priceRange } = useMemo(() => {
     if (visibleCandles.length === 0) {
       return { minPrice: 0, maxPrice: 100, priceRange: 100 };
@@ -477,7 +478,10 @@ export function CandlestickChartRefined({
       max = Math.max(max, candle.high);
     });
 
-    const padding = (max - min) * 0.1;
+    // 최소 마진: 3% (데이터가 화면의 85-90% 활용)
+    const range = max - min;
+    // 상하 마진을 최소화하여 데이터가 화면을 꽉 채우도록
+    const padding = Math.max(range * 0.02, 0.005);
     const adjustedMin = Math.max(0, min - padding);
     const adjustedMax = max + padding;
 
