@@ -110,3 +110,19 @@
 - [x] Memoization으로 UI 리렌더링 범위 제한 (ChartSvgRenderer, EventLaneRenderer)
 - [x] 60fps 성능 유지 검증
 - [x] 전체 통합 테스트 (47개 테스트 모두 통과)
+
+
+## Phase 21: 차트 그리기 도구 (추세선, 피보나치, 수평선)
+- [x] 그리기 도구 데이터 구조 정의 (drawingTools.ts: TrendLine, FibonacciRetracement, HorizontalLine, VerticalLine)
+- [x] 그리기 상태 관리 (DrawingToolsContext.tsx: isDrawing, currentTool, drawnObjects)
+- [x] 그리기 모드 선택 UI (DrawingToolsToolbar.tsx: 추세선, 피보나치, 수평선, 수직선, 해제, 모두 삭제)
+- [x] 도구 모드 전환 기능 (setCurrentTool)
+- [x] 추세선 그리기 (2점 터치로 직선 그리기)
+- [x] 피보나치 되돌림 그리기 (2점 터치로 7개 레벨 표시)
+- [x] 수평선 그리기 (1점 터치로 수평선)
+- [x] 수직선 그리기 (타임스탬프 기반)
+- [x] 그림 저장 (AsyncStorage: saveDrawings)
+- [x] 그림 로드 (종목별 저장된 그림 불러오기: loadDrawings)
+- [x] 그림 삭제 (개별/전체 삭제: deleteObject, deleteAllObjects)
+- [x] 그리기 도구 렌더러 (DrawingToolsRenderer.tsx)
+- [x] 그리기 도구 테스트 (14개 테스트 추가, 총 61개 테스트 통과)
