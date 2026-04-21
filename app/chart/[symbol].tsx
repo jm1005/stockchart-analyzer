@@ -11,10 +11,10 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
-import { CandlestickChartGesture } from "@/components/chart/CandlestickChartGesture";
-import { VolumeChartSynced } from "@/components/chart/VolumeChartSynced";
-import { RSIChartSynced } from "@/components/chart/RSIChartSynced";
-import { MACDChartSynced } from "@/components/chart/MACDChartSynced";
+import { CandlestickChartOptimized as CandlestickChart } from "@/components/chart/CandlestickChartOptimized";
+import { VolumeChart } from "@/components/chart/VolumeChart";
+import { RSIChart } from "@/components/chart/RSIChart";
+import { MACDChart } from "@/components/chart/MACDChart";
 import { PatternCard } from "@/components/chart/PatternCard";
 import { useColors } from "@/hooks/use-colors";
 import { useWatchlist } from "@/hooks/useWatchlist";
@@ -49,8 +49,6 @@ export default function ChartScreen() {
     ma60: false,
     bb: false,
   });
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [scrollOffset, setScrollOffset] = useState(0);
 
   const { data: chartData, isLoading, error } = trpc.stock.chart.useQuery(
     { symbol: symbol ?? "", period },
@@ -60,11 +58,6 @@ export default function ChartScreen() {
   const { data: quote } = trpc.stock.quote.useQuery(
     { symbol: symbol ?? "" },
     { enabled: !!symbol, staleTime: 30_000 }
-  );
-
-  const { data: earnings = [] } = trpc.stock.earnings.useQuery(
-    { symbol: symbol ?? "" },
-    { enabled: !!symbol, staleTime: 3600_000 }
   );
 
   const indicators = useMemo(() => {
@@ -225,7 +218,7 @@ export default function ChartScreen() {
             </View>
           ) : chartData && chartData.candles.length > 0 ? (
             <>
-              <CandlestickChartGesture
+              <CandlestickChart
                 candles={chartData.candles}
                 supportResistance={supportResistance}
                 patterns={patterns}
@@ -234,51 +227,12 @@ export default function ChartScreen() {
                 width={CHART_WIDTH}
                 height={280}
                 currency={chartData.currency}
-                earnings={earnings}
-                onZoomChange={setZoomLevel}
-                onScrollChange={setScrollOffset}
               />
-              {/* 줌 컨트롤 제거 - 제스처 기반 상호작용으로 대체 */}
-
-              {/* <VolumeChartSynced
+              <VolumeChart
                 candles={chartData.candles}
                 width={CHART_WIDTH}
                 height={60}
-                zoomLevel={zoomLevel}
-                scrollOffset={scrollOffset}
-                visibleCandleCount={Math.max(10, Math.floor(60 / zoomLevel))}
               />
-              {zoomLevel > 1 && (
-                <View style={[styles.scrollControls, { backgroundColor: colors.surface }]}>
-                  <TouchableOpacity
-                    style={[styles.scrollButton, { borderColor: colors.border }]}
-                    onPress={() => setScrollOffset((prev) => Math.max(0, prev - 5))}
-                  >
-                    <Text style={[styles.scrollButtonText, { color: colors.foreground }]}>◀</Text>
-                  </TouchableOpacity>
-                  <View style={[styles.scrollIndicator, { backgroundColor: colors.border }]}>
-                    <View
-                      style={[
-                        styles.scrollIndicatorFill,
-                        {
-                          backgroundColor: colors.primary,
-                          width: `${((scrollOffset + Math.max(10, Math.floor(60 / zoomLevel)) / 2) / chartData.candles.length) * 100}%`,
-                        },
-                      ]}
-                    />
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.scrollButton, { borderColor: colors.border }]}
-                    onPress={() => {
-                      const maxOffset = Math.max(0, chartData.candles.length - Math.max(10, Math.floor(60 / zoomLevel)));
-                      setScrollOffset((prev) => Math.min(maxOffset, prev + 5));
-                    }}
-                  >
-                    <Text style={[styles.scrollButtonText, { color: colors.foreground }]}>▶</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-              */}
             </>
           ) : (
             <View style={styles.loadingContainer}>
@@ -350,23 +304,19 @@ export default function ChartScreen() {
         {subChart !== "none" && chartData && indicators && (
           <View style={[styles.subChartContainer, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
             {subChart === "rsi" && (
-              <RSIChartSynced
+              <RSIChart
                 rsiData={indicators.rsi}
                 width={CHART_WIDTH}
                 height={90}
                 totalCandles={chartData.candles.length}
-                zoomLevel={zoomLevel}
-                scrollOffset={scrollOffset}
               />
             )}
             {subChart === "macd" && (
-              <MACDChartSynced
+              <MACDChart
                 macdData={indicators.macd}
                 width={CHART_WIDTH}
-                height={100}
+                height={90}
                 totalCandles={chartData.candles.length}
-                zoomLevel={zoomLevel}
-                scrollOffset={scrollOffset}
               />
             )}
           </View>
@@ -618,78 +568,4 @@ const styles = StyleSheet.create({
   signalTitle: { fontSize: 16, fontWeight: "700" },
   signalScore: { fontSize: 12, marginBottom: 4 },
   signalReason: { fontSize: 13 },
-  zoomControlsContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-    flexWrap: "wrap",
-  },
-  zoomButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    borderWidth: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  zoomButtonText: {
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  zoomLevel: {
-    fontSize: 12,
-    fontWeight: "600",
-    minWidth: 40,
-    textAlign: "center",
-  },
-  resetButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  resetButtonText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  gestureHint: {
-    fontSize: 10,
-    fontStyle: "italic",
-  },
-  scrollControls: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    gap: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
-  },
-  scrollButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    borderWidth: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  scrollButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  scrollIndicator: {
-    flex: 1,
-    height: 4,
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  scrollIndicatorFill: {
-    height: "100%",
-    borderRadius: 2,
-  },
 });
