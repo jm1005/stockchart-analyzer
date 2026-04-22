@@ -61,6 +61,26 @@ export default function AnalysisScreen() {
     return getOverallSignal(indicators, patterns, chartData.candles.length - 1);
   }, [indicators, patterns, chartData?.candles]);
 
+  // 요약 텍스트 생성
+  const summaryText = useMemo(() => {
+    if (!overallSignal) return undefined;
+
+    const signalLabel =
+      overallSignal.signal === "buy"
+        ? "매수 신호 강화"
+        : overallSignal.signal === "sell"
+        ? "매도 신호 강화"
+        : "중립 신호";
+
+    const patternCount = patterns.length;
+    const patternLabel =
+      patternCount > 0
+        ? `${patternCount}개 패턴 감지`
+        : "패턴 없음";
+
+    return `${signalLabel}, ${patternLabel}`;
+  }, [overallSignal, patterns.length]);
+
   // 종합 점수 계산 (0-100)
   const calculatedSentimentScore = useMemo(() => {
     if (!overallSignal) return 50;
@@ -120,6 +140,7 @@ export default function AnalysisScreen() {
       <AnalysisScreenContent
         sentimentScore={calculatedSentimentScore}
         isLiveUpdate={true}
+        summaryText={summaryText}
         patterns={patternList}
         patternsLoading={false}
         supportResistanceLevels={srLevelList}

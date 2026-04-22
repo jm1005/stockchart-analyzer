@@ -1,12 +1,16 @@
 /**
- * SentimentGaugeCard - AI 종합 투자 심리 게이지
+ * SentimentGaugeCard - AI 종합 투자 심리 게이지 (정제 버전)
  *
  * 기능:
  * - SVG 반원 게이지 (매수 → 중립 → 매도)
  * - 물리 연산 기반 바늘 애니메이션 (withSpring)
  * - 실시간 업데이트 인디케이터 (LIVE 뱃지)
  * - 투자 등급 캡슐 (Chip)
- * - 성능 최적화 (Memoization)
+ * - 한 줄 요약 텍스트
+ *
+ * 제거된 항목:
+ * - 범례 (색상 표시)
+ * - 카드 내부 리스트 (지지/저항, 패턴)
  */
 
 import React, { useMemo, useCallback } from "react";
@@ -34,6 +38,7 @@ const GAUGE_RADIUS = 120;
 interface SentimentGaugeCardProps {
   score: number; // 0-100
   isLive?: boolean;
+  summaryText?: string; // 한 줄 요약 (예: "상승 추세 강화, 매수 신호 증가")
   onScoreChange?: (score: number) => void;
 }
 
@@ -241,6 +246,7 @@ export const SentimentGaugeCard = React.memo(
   function SentimentGaugeCard({
     score,
     isLive = true,
+    summaryText,
     onScoreChange,
   }: SentimentGaugeCardProps) {
     const colors = useColors();
@@ -332,45 +338,23 @@ export const SentimentGaugeCard = React.memo(
           </View>
         </View>
 
-        {/* 범례 */}
-        <View style={styles.legend}>
-          <View style={styles.legendRow}>
-            <View
-              style={[
-                styles.legendDot,
-                { backgroundColor: "#0EA5E9" },
-              ]}
-            />
-            <Text style={[styles.legendLabel, { color: colors.muted }]}>
-              강력 매수
-            </Text>
-
-            <View
-              style={[
-                styles.legendDot,
-                { backgroundColor: "#9CA3AF" },
-              ]}
-            />
-            <Text style={[styles.legendLabel, { color: colors.muted }]}>
-              중립
-            </Text>
-
-            <View
-              style={[
-                styles.legendDot,
-                { backgroundColor: "#EF4444" },
-              ]}
-            />
-            <Text style={[styles.legendLabel, { color: colors.muted }]}>
-              강력 매도
+        {/* 한 줄 요약 텍스트 */}
+        {summaryText && (
+          <View style={styles.summaryContainer}>
+            <Text style={[styles.summaryText, { color: colors.muted }]}>
+              {summaryText}
             </Text>
           </View>
-        </View>
+        )}
       </View>
     );
   },
   (prevProps, nextProps) => {
-    return prevProps.score === nextProps.score && prevProps.isLive === nextProps.isLive;
+    return (
+      prevProps.score === nextProps.score &&
+      prevProps.isLive === nextProps.isLive &&
+      prevProps.summaryText === nextProps.summaryText
+    );
   }
 );
 
@@ -429,24 +413,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
   },
-  legend: {
+  summaryContainer: {
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 0.5,
     borderTopColor: "rgba(255, 255, 255, 0.1)",
   },
-  legendRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "center",
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  legendLabel: {
-    fontSize: 11,
-    marginLeft: 4,
+  summaryText: {
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
   },
 });

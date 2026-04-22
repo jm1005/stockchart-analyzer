@@ -1,10 +1,10 @@
 /**
- * AnalysisScreenContent - 분석 탭 통합 레이아웃
+ * AnalysisScreenContent - 분석 탭 통합 레이아웃 (정제 버전)
  *
  * 구조:
- * 1. AI 종합 투자 심리 게이지 (상단)
- * 2. 감지된 패턴 리스트
- * 3. 지지/저항 레벨
+ * 1. AI 종합 투자 심리 게이지 (상단) - 요약 결론만
+ * 2. 감지된 패턴 리스트 (중단)
+ * 3. 지지/저항 레벨 (하단)
  *
  * 성능 최적화:
  * - Memoization으로 불필요한 리렌더링 방지
@@ -28,6 +28,7 @@ interface AnalysisScreenContentProps {
   // 게이지 데이터
   sentimentScore: number; // 0-100
   isLiveUpdate?: boolean;
+  summaryText?: string; // 한 줄 요약
 
   // 패턴 데이터
   patterns: Array<{
@@ -66,10 +67,10 @@ const PatternCardItem = React.memo(function PatternCardItem({
 }) {
   const confidenceColor =
     item.confidence >= 0.7
-      ? colors.bullish
+      ? "#10B981"
       : item.confidence >= 0.4
-      ? colors.warning
-      : colors.bearish;
+      ? "#F59E0B"
+      : "#EF4444";
 
   return (
     <View
@@ -119,7 +120,7 @@ const SRLevelItem = React.memo(function SRLevelItem({
   currency?: string;
 }) {
   const isSupport = item.type === "support";
-  const levelColor = isSupport ? colors.support : colors.resistance;
+  const levelColor = isSupport ? "#10B981" : "#EF4444";
   const strengthPercent = Math.round(item.strength * 100);
 
   const priceStr =
@@ -180,6 +181,7 @@ export const AnalysisScreenContent = React.memo(
   function AnalysisScreenContent({
     sentimentScore,
     isLiveUpdate = true,
+    summaryText,
     patterns,
     patternsLoading = false,
     supportResistanceLevels,
@@ -220,10 +222,11 @@ export const AnalysisScreenContent = React.memo(
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
       >
-        {/* AI 종합 투자 심리 게이지 */}
+        {/* AI 종합 투자 심리 게이지 (요약 결론만) */}
         <SentimentGaugeCard
           score={sentimentScore}
           isLive={isLiveUpdate}
+          summaryText={summaryText}
           onScoreChange={onSentimentChange}
         />
 
@@ -289,6 +292,7 @@ export const AnalysisScreenContent = React.memo(
     return (
       prevProps.sentimentScore === nextProps.sentimentScore &&
       prevProps.isLiveUpdate === nextProps.isLiveUpdate &&
+      prevProps.summaryText === nextProps.summaryText &&
       prevProps.patterns.length === nextProps.patterns.length &&
       prevProps.supportResistanceLevels.length === nextProps.supportResistanceLevels.length &&
       prevProps.patternsLoading === nextProps.patternsLoading &&
