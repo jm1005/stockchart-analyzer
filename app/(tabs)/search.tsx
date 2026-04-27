@@ -1,287 +1,139 @@
-import React, { useState, useCallback } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-} from "react-native";
-import { useRouter } from "expo-router";
-import { ScreenContainer } from "@/components/screen-container";
-import { useColors } from "@/hooks/use-colors";
-import { useRecentSearches } from "@/hooks/useRecentSearches";
-import { trpc } from "@/lib/trpc";
-import type { SearchResult } from "@/shared/stockTypes";
+import React, { useState, useEffect } from 'react';
+import { 
+  View, Text, TextInput, FlatList, TouchableOpacity, 
+  StyleSheet, SafeAreaView, ActivityIndicator 
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
-// Popular Korean stocks for quick access
-const POPULAR_KR = [
-  { symbol: "005930.KS", name: "삼성전자", exchange: "KRX" },
-  { symbol: "000660.KS", name: "SK하이닉스", exchange: "KRX" },
-  { symbol: "035420.KS", name: "NAVER", exchange: "KRX" },
-  { symbol: "035720.KS", name: "카카오", exchange: "KRX" },
-  { symbol: "051910.KS", name: "LG화학", exchange: "KRX" },
-  { symbol: "006400.KS", name: "삼성SDI", exchange: "KRX" },
-  { symbol: "207940.KS", name: "삼성바이오로직스", exchange: "KRX" },
-  { symbol: "005380.KS", name: "현대차", exchange: "KRX" },
-];
-
-const POPULAR_US = [
-  { symbol: "AAPL", name: "Apple Inc.", exchange: "NASDAQ" },
-  { symbol: "MSFT", name: "Microsoft", exchange: "NASDAQ" },
-  { symbol: "NVDA", name: "NVIDIA", exchange: "NASDAQ" },
-  { symbol: "TSLA", name: "Tesla", exchange: "NASDAQ" },
-  { symbol: "AMZN", name: "Amazon", exchange: "NASDAQ" },
-  { symbol: "GOOGL", name: "Alphabet", exchange: "NASDAQ" },
-];
-
+// 검색 화면 컴포넌트
 export default function SearchScreen() {
-  const colors = useColors();
   const router = useRouter();
-  const { recent, addRecent, clearRecent } = useRecentSearches();
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [marketTab, setMarketTab] = useState<"KR" | "US">("KR");
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 💡 스마트 검색 API 호출 함수
+  const searchStocks = async (searchTerm: string) => {
+    if (!searchTerm.trim()) {
+      setResults([]);
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(searchTerm)}&quotesCount=10&newsCount=0`
+      );
+      const data = await response.json();
+      
+      // 🚨 수정된 부분: API 응답에 quotes 배열이 정상적으로 있는지 먼저 확인하여 앱이 터지는 것을 방지합니다.
+      if (data && Array.isArray(data.quotes)) {
+        // 검색 결과 중 주식/ETF 등 거래 가능한 종목만 필터링
+        const validQuotes = data.quotes.filter((q: any) => 
+          q.isYahooFinance && (q.quoteType === 'EQUITY' || q.quoteType === 'ETF')
+        );
+        setResults(validQuotes);
+      } else {
+        // 결과가 없거나 잘못된 응답일 경우 빈 배열 처리
+        setResults([]);
+      }
+    } catch (error) {
+      console.error("검색 오류:", error);
+      setResults([]); // 에러 발생 시에도 앱이 터지지 않도록 빈 배열 처리
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleQueryChange = useCallback((text: string) => {
-    setQuery(text);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setDebouncedQuery(text), 400);
-  }, []);
+  // 타이핑 시 API 호출 지연(Debounce) 로직
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchStocks(query);
+    }, 400); // 0.4초 동안 입력이 없으면 검색 실행
+    return () => clearTimeout(timer);
+  }, [query]);
 
-  const { data: searchResults, isLoading: searching } = trpc.stock.search.useQuery(
-    { query: debouncedQuery },
-    { enabled: debouncedQuery.length >= 1, staleTime: 30_000 }
-  );
-
-  const handleSelect = useCallback(
-    async (item: SearchResult) => {
-      await addRecent(item);
-      router.push(`/chart/${item.symbol}` as any);
-    },
-    [addRecent, router]
-  );
-
-  const renderItem = ({ item }: { item: SearchResult }) => (
-    <TouchableOpacity
-      onPress={() => handleSelect(item)}
-      style={[styles.resultItem, { borderBottomColor: colors.border }]}
-      activeOpacity={0.7}
+  const renderItem = ({ item }: { item: any }) => (
+    <TouchableOpacity 
+      style={styles.resultItem} 
+      onPress={() => router.push(`/chart/${item.symbol}`)}
     >
       <View style={styles.resultLeft}>
-        <Text style={[styles.resultSymbol, { color: colors.foreground }]}>{item.symbol}</Text>
-        <Text style={[styles.resultName, { color: colors.muted }]} numberOfLines={1}>
-          {item.name}
+        <Text style={styles.symbolText}>{item.symbol}</Text>
+        <Text style={styles.nameText} numberOfLines={1}>
+          {item.shortname || item.longname || item.symbol}
         </Text>
       </View>
-      <View style={[styles.exchangeBadge, { backgroundColor: colors.surface }]}>
-        <Text style={[styles.exchangeText, { color: colors.muted }]}>{item.exchange}</Text>
+      <View style={styles.badge}>
+        <Text style={styles.badgeText}>{item.exchDisp || item.exchange}</Text>
       </View>
     </TouchableOpacity>
   );
 
-  const popularList = marketTab === "KR" ? POPULAR_KR : POPULAR_US;
-  const showSearch = debouncedQuery.length >= 1;
-
   return (
-    <ScreenContainer>
-      {/* Search Header */}
-      <View style={[styles.searchHeader, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.screenTitle, { color: colors.foreground }]}>검색</Text>
-        <View style={[styles.searchBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.searchIcon, { color: colors.muted }]}>🔍</Text>
+    <SafeAreaView style={styles.container}>
+      {/* 검색 바 헤더 */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="chevron-back" size={28} color="#1e293b" />
+        </TouchableOpacity>
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={20} color="#94a3b8" style={styles.searchIcon} />
           <TextInput
+            style={styles.searchInput}
+            placeholder="삼성, TSLA 등 종목명/코드 검색"
+            placeholderTextColor="#94a3b8"
             value={query}
-            onChangeText={handleQueryChange}
-            placeholder="종목명 또는 코드 입력 (예: 삼성전자, AAPL)"
-            placeholderTextColor={colors.muted}
-            style={[styles.searchInput, { color: colors.foreground }]}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
+            onChangeText={setQuery}
+            autoFocus
+            clearButtonMode="while-editing"
           />
-          {query.length > 0 && (
-            <TouchableOpacity onPress={() => { setQuery(""); setDebouncedQuery(""); }}>
-              <Text style={[styles.clearBtn, { color: colors.muted }]}>✕</Text>
-            </TouchableOpacity>
-          )}
         </View>
       </View>
 
-      {showSearch ? (
-        /* Search Results */
+      {/* 검색 결과 리스트 */}
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#3b82f6" />
+        </View>
+      ) : results.length > 0 ? (
         <FlatList
-          data={searchResults ?? []}
+          data={results}
           keyExtractor={(item) => item.symbol}
           renderItem={renderItem}
-          ListHeaderComponent={
-            searching ? (
-              <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />
-            ) : null
-          }
-          ListEmptyComponent={
-            !searching ? (
-              <View style={styles.emptySearch}>
-                <Text style={[styles.emptyText, { color: colors.muted }]}>
-                  검색 결과가 없습니다
-                </Text>
-              </View>
-            ) : null
-          }
           contentContainerStyle={styles.listContent}
+          keyboardShouldPersistTaps="handled"
         />
+      ) : query.length > 0 ? (
+        <View style={styles.center}>
+          <Ionicons name="search-outline" size={48} color="#cbd5e1" />
+          <Text style={styles.emptyText}>'{query}' 검색 결과가 없습니다.</Text>
+        </View>
       ) : (
-        <FlatList
-          data={[]}
-          renderItem={null}
-          ListHeaderComponent={
-            <View>
-              {/* Recent Searches */}
-              {recent.length > 0 && (
-                <View style={styles.section}>
-                  <View style={styles.sectionHeader}>
-                    <Text style={[styles.sectionTitle, { color: colors.muted }]}>최근 검색</Text>
-                    <TouchableOpacity onPress={clearRecent}>
-                      <Text style={[styles.clearAll, { color: colors.muted }]}>전체 삭제</Text>
-                    </TouchableOpacity>
-                  </View>
-                  {recent.map((item) => (
-                    <TouchableOpacity
-                      key={item.symbol}
-                      onPress={() => handleSelect(item)}
-                      style={[styles.resultItem, { borderBottomColor: colors.border }]}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.resultLeft}>
-                        <Text style={[styles.resultSymbol, { color: colors.foreground }]}>
-                          {item.symbol}
-                        </Text>
-                        <Text style={[styles.resultName, { color: colors.muted }]}>
-                          {item.name}
-                        </Text>
-                      </View>
-                      <Text style={{ color: colors.muted, fontSize: 12 }}>최근</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-
-              {/* Popular Stocks */}
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text style={[styles.sectionTitle, { color: colors.muted }]}>인기 종목</Text>
-                  <View style={styles.marketTabs}>
-                    {(["KR", "US"] as const).map((tab) => (
-                      <TouchableOpacity
-                        key={tab}
-                        onPress={() => setMarketTab(tab)}
-                        style={[
-                          styles.marketTab,
-                          marketTab === tab && { backgroundColor: colors.primary },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.marketTabText,
-                            { color: marketTab === tab ? "#fff" : colors.muted },
-                          ]}
-                        >
-                          {tab === "KR" ? "🇰🇷 한국" : "🇺🇸 미국"}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-                {popularList.map((item) => (
-                  <TouchableOpacity
-                    key={item.symbol}
-                    onPress={() => handleSelect(item)}
-                    style={[styles.resultItem, { borderBottomColor: colors.border }]}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.resultLeft}>
-                      <Text style={[styles.resultSymbol, { color: colors.foreground }]}>
-                        {item.symbol}
-                      </Text>
-                      <Text style={[styles.resultName, { color: colors.muted }]}>
-                        {item.name}
-                      </Text>
-                    </View>
-                    <View style={[styles.exchangeBadge, { backgroundColor: colors.surface }]}>
-                      <Text style={[styles.exchangeText, { color: colors.muted }]}>
-                        {item.exchange}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          }
-          contentContainerStyle={styles.listContent}
-        />
+        <View style={styles.center}>
+          <Text style={styles.guideText}>궁금한 주식이나 기업 이름을 검색해보세요.</Text>
+        </View>
       )}
-    </ScreenContainer>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  searchHeader: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
-    borderBottomWidth: 0.5,
-    gap: 10,
-  },
-  screenTitle: { fontSize: 26, fontWeight: "800" },
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  searchIcon: { fontSize: 14 },
-  searchInput: { flex: 1, fontSize: 15, padding: 0 },
-  clearBtn: { fontSize: 14, padding: 2 },
-  listContent: { paddingBottom: 32 },
-  section: { paddingTop: 16 },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    marginBottom: 4,
-  },
-  sectionTitle: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.5 },
-  clearAll: { fontSize: 12 },
-  marketTabs: { flexDirection: "row", gap: 4 },
-  marketTab: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  marketTabText: { fontSize: 12, fontWeight: "600" },
-  resultItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-  },
-  resultLeft: { flex: 1, gap: 2 },
-  resultSymbol: { fontSize: 15, fontWeight: "700" },
-  resultName: { fontSize: 12 },
-  exchangeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  exchangeText: { fontSize: 11, fontWeight: "500" },
-  emptySearch: { alignItems: "center", paddingTop: 48 },
-  emptyText: { fontSize: 15 },
+  container: { flex: 1, backgroundColor: '#ffffff' },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  backBtn: { marginRight: 12 },
+  searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 12, paddingHorizontal: 12, height: 44 },
+  searchIcon: { marginRight: 8 },
+  searchInput: { flex: 1, fontSize: 16, color: '#0f172a' },
+  listContent: { paddingHorizontal: 16, paddingBottom: 20 },
+  resultItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#f8fafc' },
+  resultLeft: { flex: 1, paddingRight: 16 },
+  symbolText: { fontSize: 16, fontWeight: '800', color: '#1e293b', marginBottom: 4 },
+  nameText: { fontSize: 13, color: '#64748b' },
+  badge: { backgroundColor: '#f1f5f9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  badgeText: { fontSize: 11, fontWeight: '700', color: '#64748b' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  emptyText: { marginTop: 12, fontSize: 15, color: '#64748b', fontWeight: '500' },
+  guideText: { fontSize: 15, color: '#94a3b8' }
 });

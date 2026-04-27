@@ -1,372 +1,137 @@
 import React, { useMemo, useCallback, useState } from "react";
-import { View, Text, StyleSheet, Dimensions, PanResponder } from "react-native";
-import Svg, { Rect, Line, G, Path, Text as SvgText } from "react-native-svg";
-import { useColors } from "@/hooks/use-colors";
-import type { Candle, SupportResistanceLevel, PatternResult, TechnicalIndicators } from "@/shared/stockTypes";
+import { View, StyleSheet, Dimensions } from "react-native";
+import Svg, { Line, Rect, Text as SvgText, G } from "react-native-svg";
+import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from "react-native-reanimated";
+
+interface Candle {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+interface Props {
+  candles: Candle[];
+}
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const AnimatedSvg = Animated.createAnimatedComponent(Svg);
 
-interface CandlestickChartProps {
-  candles: Candle[];
-  supportResistance?: SupportResistanceLevel[];
-  patterns?: PatternResult[];
-  indicators?: TechnicalIndicators;
-  activeIndicators?: {
-    ma5: boolean;
-    ma20: boolean;
-    ma60: boolean;
-    bb: boolean;
-  };
-  width?: number;
-  height?: number;
-  currency?: string;
-}
+// 💡 ト스/트레이딩뷰 감성의 부드러운 핀치 줌인/아웃 캔들스틱 차트
+export default function CandlestickChart({ candles }: Props) {
+  const chartWidth = SCREEN_WIDTH - 60; 
+  const chartHeight = 250;
 
-export function CandlestickChart({
-  candles,
-  supportResistance = [],
-  patterns = [],
-  indicators,
-  activeIndicators = { ma5: false, ma20: false, ma60: false, bb: false },
-  width = SCREEN_WIDTH - 16,
-  height = 300,
-  currency = "KRW",
-}: CandlestickChartProps) {
-  const colors = useColors();
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const scale = useSharedValue(1);
+  const offsetX = useSharedValue(0);
 
-  const PADDING = { top: 16, right: 60, bottom: 8, left: 8 };
-  const chartWidth = width - PADDING.left - PADDING.right;
-  const chartHeight = height - PADDING.top - PADDING.bottom;
+  const [viewport, setViewport] = useState({
+    startIndex: Math.max(0, candles.length - 60), // 기본 60개 캔들 표시
+    endIndex: candles.length - 1,
+    candleWidth: chartWidth / 60,
+    minPrice: 0,
+    maxPrice: 0,
+  });
 
-  const visibleCandles = useMemo(() => {
-    if (candles.length <= 60) return candles;
-    return candles.slice(candles.length - 60);
-  }, [candles]);
+  const calculateViewport = useCallback((zoomLevel: number, panX: number) => {
+    const visibleCount = Math.max(10, Math.floor(60 / zoomLevel));
+    const pixelPerCandle = chartWidth / visibleCount;
+    const panOffset = Math.floor(panX / pixelPerCandle);
+    
+    let startIndex = Math.max(0, candles.length - visibleCount - panOffset);
+    let endIndex = Math.min(candles.length - 1, startIndex + visibleCount);
 
-  const { minPrice, maxPrice, priceRange } = useMemo(() => {
-    if (visibleCandles.length === 0) return { minPrice: 0, maxPrice: 100, priceRange: 100 };
-    let min = Infinity;
-    let max = -Infinity;
-    for (const c of visibleCandles) {
-      if (c.low < min) min = c.low;
-      if (c.high > max) max = c.high;
+    if (endIndex - startIndex < visibleCount) {
+      startIndex = Math.max(0, endIndex - visibleCount);
     }
-    // Add SR levels to range
-    for (const sr of supportResistance) {
-      if (sr.price < min) min = sr.price;
-      if (sr.price > max) max = sr.price;
-    }
-    const padding = (max - min) * 0.05;
-    return { minPrice: min - padding, maxPrice: max + padding, priceRange: max - min + padding * 2 };
-  }, [visibleCandles, supportResistance]);
 
-  const toY = useCallback(
-    (price: number) =>
-      PADDING.top + chartHeight - ((price - minPrice) / priceRange) * chartHeight,
-    [minPrice, priceRange, chartHeight, PADDING.top]
-  );
+    const visibleCandles = candles.slice(startIndex, endIndex + 1);
+    const prices = visibleCandles.flatMap((c) => [c.high, c.low]);
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+    const padding = (maxPrice - minPrice) * 0.1;
 
-  const candleWidth = Math.max(2, chartWidth / visibleCandles.length - 1);
-  const offset = candles.length > 60 ? candles.length - 60 : 0;
+    return {
+      startIndex,
+      endIndex,
+      candleWidth: chartWidth / (endIndex - startIndex + 1),
+      minPrice: minPrice - padding,
+      maxPrice: maxPrice + padding,
+    };
+  }, [candles, chartWidth]);
 
-  const toX = useCallback(
-    (index: number) =>
-      PADDING.left + (index - offset) * (chartWidth / visibleCandles.length) + candleWidth / 2,
-    [offset, chartWidth, visibleCandles.length, candleWidth, PADDING.left]
-  );
+  const updateViewport = useCallback((zoomLevel: number, panX: number) => {
+    setViewport(calculateViewport(zoomLevel, panX));
+  }, [calculateViewport]);
 
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: (e) => {
-          const x = e.nativeEvent.locationX - PADDING.left;
-          const idx = Math.round((x / chartWidth) * (visibleCandles.length - 1));
-          const clampedIdx = Math.max(0, Math.min(visibleCandles.length - 1, idx));
-          setSelectedIndex(offset + clampedIdx);
-        },
-        onPanResponderMove: (e) => {
-          const x = e.nativeEvent.locationX - PADDING.left;
-          const idx = Math.round((x / chartWidth) * (visibleCandles.length - 1));
-          const clampedIdx = Math.max(0, Math.min(visibleCandles.length - 1, idx));
-          setSelectedIndex(offset + clampedIdx);
-        },
-        onPanResponderRelease: () => {
-          setTimeout(() => setSelectedIndex(null), 2000);
-        },
-      }),
-    [chartWidth, visibleCandles.length, offset, PADDING.left]
-  );
-
-  const selectedCandle = selectedIndex != null ? candles[selectedIndex] : null;
-
-  const formatPrice = (price: number) => {
-    if (currency === "KRW") {
-      return price >= 1000
-        ? `₩${(price / 1000).toFixed(0)}K`
-        : `₩${price.toFixed(0)}`;
-    }
-    return `$${price.toFixed(2)}`;
-  };
-
-  const formatPriceFull = (price: number) => {
-    if (currency === "KRW") return `₩${price.toLocaleString("ko-KR")}`;
-    return `$${price.toFixed(2)}`;
-  };
-
-  // Y-axis labels
-  const yLabels = useMemo(() => {
-    const count = 5;
-    return Array.from({ length: count }, (_, i) => {
-      const price = minPrice + (priceRange * i) / (count - 1);
-      return { price, y: toY(price) };
+  // 💡 핀치 (줌 인/아웃) 제스처
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((event) => {
+      const newScale = Math.max(0.5, Math.min(5, event.scale));
+      scale.value = newScale;
+      runOnJS(updateViewport)(newScale, offsetX.value);
     });
-  }, [minPrice, priceRange, toY]);
+
+  // 💡 패닝 (좌우 이동) 제스처
+  const panGesture = Gesture.Pan()
+    .onUpdate((event) => {
+      offsetX.value = event.translationX;
+      runOnJS(updateViewport)(scale.value, event.translationX);
+    });
+
+  const composedGesture = Gesture.Simultaneous(pinchGesture, panGesture);
+
+  const priceToY = useCallback((price: number) => {
+    const { minPrice, maxPrice } = viewport;
+    const range = maxPrice - minPrice;
+    return chartHeight - ((price - minPrice) / range) * chartHeight;
+  }, [viewport, chartHeight]);
+
+  const { minPrice, maxPrice, startIndex, endIndex, candleWidth } = viewport;
 
   return (
-    <View style={[styles.container, { width, height }]}>
-      {/* OHLCV Info Bar */}
-      {selectedCandle ? (
-        <View style={[styles.infoBar, { backgroundColor: colors.surface }]}>
-          <Text style={[styles.infoText, { color: colors.muted }]}>
-            {new Date(selectedCandle.timestamp).toLocaleDateString("ko-KR")}
-          </Text>
-          <Text style={[styles.infoText, { color: colors.bullish }]}>
-            O {formatPriceFull(selectedCandle.open)}
-          </Text>
-          <Text style={[styles.infoText, { color: colors.bullish }]}>
-            H {formatPriceFull(selectedCandle.high)}
-          </Text>
-          <Text style={[styles.infoText, { color: colors.bearish }]}>
-            L {formatPriceFull(selectedCandle.low)}
-          </Text>
-          <Text style={[styles.infoText, { color: colors.foreground }]}>
-            C {formatPriceFull(selectedCandle.close)}
-          </Text>
+    <GestureHandlerRootView style={styles.container}>
+      <GestureDetector gesture={composedGesture}>
+        <View style={styles.chartContainer}>
+          <AnimatedSvg width={SCREEN_WIDTH} height={chartHeight} style={styles.svg}>
+            {/* 배경선 (토스 감성의 연한 선) */}
+            <Line x1="45" y1={chartHeight} x2={SCREEN_WIDTH} y2={chartHeight} stroke="#f1f5f9" strokeWidth="1" />
+            <Line x1="45" y1={chartHeight/2} x2={SCREEN_WIDTH} y2={chartHeight/2} stroke="#f1f5f9" strokeWidth="1" strokeDasharray="4 4" />
+            
+            {/* 가격 라벨 */}
+            <SvgText x="40" y="15" fontSize="10" fill="#94a3b8" textAnchor="end">
+              {Math.round(maxPrice).toLocaleString()}
+            </SvgText>
+            <SvgText x="40" y={chartHeight - 5} fontSize="10" fill="#94a3b8" textAnchor="end">
+              {Math.round(minPrice).toLocaleString()}
+            </SvgText>
+
+            {/* 캔들 그리기 */}
+            {candles.slice(startIndex, endIndex + 1).map((candle, idx) => {
+              const x = idx * candleWidth + 50;
+              const topY = priceToY(Math.max(candle.open, candle.close));
+              const bottomY = priceToY(Math.min(candle.open, candle.close));
+              const isBull = candle.close >= candle.open;
+              const color = isBull ? "#ef4444" : "#3b82f6"; // 상승 빨강, 하락 파랑
+
+              return (
+                <G key={idx}>
+                  <Line x1={x + candleWidth / 2} y1={priceToY(candle.high)} x2={x + candleWidth / 2} y2={priceToY(candle.low)} stroke={color} strokeWidth="1.5" />
+                  <Rect x={x + candleWidth * 0.1} y={topY} width={candleWidth * 0.8} height={Math.max(1, bottomY - topY)} fill={color} rx="1" />
+                </G>
+              );
+            })}
+          </AnimatedSvg>
         </View>
-      ) : null}
-
-      <View {...panResponder.panHandlers}>
-        <Svg width={width} height={height}>
-          {/* Y-axis grid lines and labels */}
-          {yLabels.map((label, i) => (
-            <G key={i}>
-              <Line
-                x1={PADDING.left}
-                y1={label.y}
-                x2={width - PADDING.right}
-                y2={label.y}
-                stroke={colors.border}
-                strokeWidth={0.5}
-                strokeDasharray="4,4"
-              />
-              <SvgText
-                x={width - PADDING.right + 4}
-                y={label.y + 4}
-                fontSize={9}
-                fill={colors.muted}
-              >
-                {formatPrice(label.price)}
-              </SvgText>
-            </G>
-          ))}
-
-          {/* Support & Resistance Lines */}
-          {supportResistance.map((sr, i) => {
-            const y = toY(sr.price);
-            if (y < PADDING.top || y > height - PADDING.bottom) return null;
-            const color = sr.type === "support" ? colors.support : colors.resistance;
-            return (
-              <G key={`sr-${i}`}>
-                <Line
-                  x1={PADDING.left}
-                  y1={y}
-                  x2={width - PADDING.right}
-                  y2={y}
-                  stroke={color}
-                  strokeWidth={1.5}
-                  strokeDasharray="6,3"
-                  opacity={0.8}
-                />
-                <SvgText
-                  x={width - PADDING.right + 4}
-                  y={y - 2}
-                  fontSize={8}
-                  fill={color}
-                  fontWeight="600"
-                >
-                  {sr.type === "support" ? "S" : "R"}
-                </SvgText>
-              </G>
-            );
-          })}
-
-          {/* Bollinger Bands */}
-          {indicators && activeIndicators.bb && (() => {
-            const bb = indicators.bollingerBands;
-            const upperPath: string[] = [];
-            const lowerPath: string[] = [];
-            let upperStarted = false;
-            let lowerStarted = false;
-
-            for (let i = offset; i < candles.length; i++) {
-              const upper = bb.upper[i];
-              const lower = bb.lower[i];
-              const x = toX(i);
-              if (upper != null) {
-                const y = toY(upper);
-                if (!upperStarted) { upperPath.push(`M ${x} ${y}`); upperStarted = true; }
-                else upperPath.push(`L ${x} ${y}`);
-              }
-              if (lower != null) {
-                const y = toY(lower);
-                if (!lowerStarted) { lowerPath.push(`M ${x} ${y}`); lowerStarted = true; }
-                else lowerPath.push(`L ${x} ${y}`);
-              }
-            }
-            return (
-              <G>
-                <Path d={upperPath.join(" ")} stroke="#8B5CF6" strokeWidth={1} fill="none" opacity={0.6} />
-                <Path d={lowerPath.join(" ")} stroke="#8B5CF6" strokeWidth={1} fill="none" opacity={0.6} />
-              </G>
-            );
-          })()}
-
-          {/* MA Lines */}
-          {indicators && (
-            <>
-              {activeIndicators.ma5 && renderMALine(indicators.ma5, offset, candles.length, toX, toY, "#F59E0B")}
-              {activeIndicators.ma20 && renderMALine(indicators.ma20, offset, candles.length, toX, toY, "#3B82F6")}
-              {activeIndicators.ma60 && renderMALine(indicators.ma60, offset, candles.length, toX, toY, "#EC4899")}
-            </>
-          )}
-
-          {/* Candlesticks */}
-          {visibleCandles.map((candle, visIdx) => {
-            const i = offset + visIdx;
-            const x = toX(i);
-            const openY = toY(candle.open);
-            const closeY = toY(candle.close);
-            const highY = toY(candle.high);
-            const lowY = toY(candle.low);
-            const isBullish = candle.close >= candle.open;
-            const color = isBullish ? colors.bullish : colors.bearish;
-            const bodyTop = Math.min(openY, closeY);
-            const bodyHeight = Math.max(1, Math.abs(closeY - openY));
-            const isSelected = selectedIndex === i;
-
-            return (
-              <G key={i}>
-                {/* Wick */}
-                <Line
-                  x1={x}
-                  y1={highY}
-                  x2={x}
-                  y2={lowY}
-                  stroke={color}
-                  strokeWidth={1}
-                  opacity={isSelected ? 1 : 0.9}
-                />
-                {/* Body */}
-                <Rect
-                  x={x - candleWidth / 2}
-                  y={bodyTop}
-                  width={candleWidth}
-                  height={bodyHeight}
-                  fill={isBullish ? color : color}
-                  opacity={isSelected ? 1 : 0.85}
-                  rx={1}
-                />
-                {/* Selection highlight */}
-                {isSelected && (
-                  <Line
-                    x1={x}
-                    y1={PADDING.top}
-                    x2={x}
-                    y2={height - PADDING.bottom}
-                    stroke={colors.muted}
-                    strokeWidth={1}
-                    strokeDasharray="3,3"
-                    opacity={0.5}
-                  />
-                )}
-              </G>
-            );
-          })}
-
-          {/* Pattern markers */}
-          {patterns.map((pattern, i) => {
-            const endIdx = Math.min(pattern.endIndex, candles.length - 1);
-            const x = toX(endIdx);
-            const y = PADDING.top + 8;
-            const patternColor = pattern.signal === "bullish" ? colors.bullish : pattern.signal === "bearish" ? colors.bearish : colors.muted;
-            return (
-              <G key={`pattern-${i}`}>
-                <Rect
-                  x={x - 12}
-                  y={y - 8}
-                  width={24}
-                  height={14}
-                  fill={patternColor}
-                  opacity={0.85}
-                  rx={3}
-                />
-                <SvgText
-                  x={x}
-                  y={y + 2}
-                  fontSize={7}
-                  fill="#fff"
-                  textAnchor="middle"
-                  fontWeight="700"
-                >
-                  {pattern.signal === "bullish" ? "▲" : pattern.signal === "bearish" ? "▼" : "◆"}
-                </SvgText>
-              </G>
-            );
-          })}
-        </Svg>
-      </View>
-    </View>
+      </GestureDetector>
+    </GestureHandlerRootView>
   );
-}
-
-function renderMALine(
-  maData: (number | null)[],
-  offset: number,
-  total: number,
-  toX: (i: number) => number,
-  toY: (price: number) => number,
-  color: string
-) {
-  const pathParts: string[] = [];
-  let started = false;
-  for (let i = offset; i < total; i++) {
-    const val = maData[i];
-    if (val == null) { started = false; continue; }
-    const x = toX(i);
-    const y = toY(val);
-    if (!started) { pathParts.push(`M ${x} ${y}`); started = true; }
-    else pathParts.push(`L ${x} ${y}`);
-  }
-  if (pathParts.length === 0) return null;
-  return <Path key={color} d={pathParts.join(" ")} stroke={color} strokeWidth={1.5} fill="none" opacity={0.8} />;
 }
 
 const styles = StyleSheet.create({
-  container: {
-    overflow: "hidden",
-  },
-  infoBar: {
-    flexDirection: "row",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  infoText: {
-    fontSize: 10,
-    fontWeight: "500",
-  },
+  container: { backgroundColor: '#fff', marginVertical: 10 },
+  chartContainer: { height: 250, width: '100%', overflow: 'hidden' },
+  svg: { width: '100%', height: '100%' }
 });
