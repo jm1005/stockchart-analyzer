@@ -75,8 +75,9 @@ async function startServer() {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, () => {
-    console.log(`[api] server listening on port ${port}`);
+  // 💡 [핵심 수정] "0.0.0.0"을 추가하여 외부 기기(LD플레이어 등)의 접속을 전면 허용합니다!
+  server.listen(port, "0.0.0.0", () => {
+    console.log(`[api] server listening on port ${port} (0.0.0.0)`);
   });
 }
 

@@ -1,8 +1,7 @@
 import * as Linking from "expo-linking";
 import * as ReactNative from "react-native";
 
-// Extract scheme from bundle ID (last segment timestamp, prefixed with "manus")
-// e.g., "space.manus.my.app.t20240115103045" -> "manus20240115103045"
+// 번들 ID에서 스킴 추출 (마지막 세그먼트 타임스탬프, "manus" 접두사)
 const bundleId = "space.manus.stockchart.analyzer.t20260331015323";
 const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
 const schemeFromBundleId = `manus${timestamp}`;
@@ -25,27 +24,32 @@ export const OWNER_NAME = env.ownerName;
 export const API_BASE_URL = env.apiBaseUrl;
 
 /**
- * Get the API base URL, deriving from current hostname if not set.
- * Metro runs on 8081, API server runs on 3000.
- * URL pattern: https://PORT-sandboxid.region.domain
+ * API 기본 URL을 가져옵니다. 
+ * 설정되지 않은 경우 현재 환경(웹/안드로이드/iOS)에 맞춰 똑똑하게 자동 설정됩니다.
  */
 export function getApiBaseUrl(): string {
-  // If API_BASE_URL is set, use it
+  // 1. .env 파일에 API_BASE_URL이 명시적으로 설정되어 있으면 그것을 최우선으로 사용합니다.
   if (API_BASE_URL) {
     return API_BASE_URL.replace(/\/$/, "");
   }
 
-  // On web, derive from current hostname by replacing port 8081 with 3000
+  // 2. 웹(Web) 환경일 경우 현재 브라우저 주소 기반으로 설정 (8081 포트를 3000 포트로 변경)
   if (ReactNative.Platform.OS === "web" && typeof window !== "undefined" && window.location) {
     const { protocol, hostname } = window.location;
-    // Pattern: 8081-sandboxid.region.domain -> 3000-sandboxid.region.domain
     const apiHostname = hostname.replace(/^8081-/, "3000-");
     if (apiHostname !== hostname) {
       return `${protocol}//${apiHostname}`;
     }
   }
 
-  // Fallback to empty (will use relative URL)
+  // 3. 💡 [LD플레이어 완벽 대응] 무한 로딩 방지를 위해 PC의 진짜 내부 IP를 하드코딩합니다.
+  // 이전에 에러 화면에서 확인된 192.168.0.5를 사용합니다. 
+  // (만약 PC의 와이파이/랜선 IP가 바뀌었다면 이 부분의 숫자를 바꿔주셔야 합니다.)
+  if (__DEV__) {
+    return "http://192.168.0.5:3000"; 
+  }
+
+  // 폴백(Fallback): 빈 문자열 반환 (상대 경로 사용)
   return "";
 }
 
@@ -64,9 +68,9 @@ const encodeState = (value: string) => {
 };
 
 /**
- * Get the redirect URI for OAuth callback.
- * - Web: uses API server callback endpoint
- * - Native: uses deep link scheme
+ * OAuth 콜백을 위한 리다이렉트 URI를 가져옵니다.
+ * - Web: API 서버의 콜백 엔드포인트 사용
+ * - Native: 앱의 딥링크 스킴 사용
  */
 export const getRedirectUri = () => {
   if (ReactNative.Platform.OS === "web") {
@@ -92,20 +96,17 @@ export const getLoginUrl = () => {
 };
 
 /**
- * Start OAuth login flow.
+ * OAuth 로그인 흐름을 시작합니다.
  *
- * On native platforms (iOS/Android), open the system browser directly so
- * the OAuth callback returns via deep link to the app.
- *
- * On web, this simply redirects to the login URL.
- *
- * @returns Always null, the callback is handled via deep link.
+ * 네이티브(iOS/Android)에서는 시스템 브라우저를 열어
+ * OAuth 콜백이 딥링크를 통해 앱으로 돌아오게 합니다.
+ * 웹에서는 단순히 로그인 URL로 리다이렉트합니다.
  */
 export async function startOAuthLogin(): Promise<string | null> {
   const loginUrl = getLoginUrl();
 
   if (ReactNative.Platform.OS === "web") {
-    // On web, just redirect
+    // 웹 환경에서는 즉시 리다이렉트
     if (typeof window !== "undefined") {
       window.location.href = loginUrl;
     }
@@ -114,18 +115,15 @@ export async function startOAuthLogin(): Promise<string | null> {
 
   const supported = await Linking.canOpenURL(loginUrl);
   if (!supported) {
-    console.warn("[OAuth] Cannot open login URL: URL scheme not supported");
-    // 可考虑抛出错误或返回错误状态，让调用方处理
+    console.warn("[OAuth] 로그인 URL을 열 수 없습니다: 지원되지 않는 URL 스킴");
     return null;
   }
 
   try {
     await Linking.openURL(loginUrl);
   } catch (error) {
-    console.error("[OAuth] Failed to open login URL:", error);
-    // 可考虑抛出错误让调用方处理
+    console.error("[OAuth] 로그인 URL 열기 실패:", error);
   }
 
-  // The OAuth callback will reopen the app via deep link.
   return null;
 }
